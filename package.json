@@ -1,0 +1,16 @@
+{
+  "name": "rsi-evolution-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "check": "wrangler types && wrangler types --check && node --check src/index.js && node --check src/evolution.js && node --check scripts/snapshot.mjs",
+    "deploy": "wrangler deploy",
+    "snapshot": "node scripts/snapshot.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.133.0"
+  }
+}

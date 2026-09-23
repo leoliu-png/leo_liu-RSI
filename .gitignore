@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.sites-runtime/
+worker-configuration.d.ts
+/*.png

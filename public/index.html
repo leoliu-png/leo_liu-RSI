@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Prompt RSI Lab：每天用真实模型与公开基准测试集优化技术摘要提示词。">
+  <title>Prompt RSI Lab · 提示词自进化实验室</title>
+  <style>
+    :root { color-scheme: dark; --bg:#080908; --panel:#141612; --line:#30342d; --text:#f1f4e9; --muted:#abb1a4; --acid:#d9ff43; --red:#ff776b; --mono:ui-monospace,Consolas,"Liberation Mono",monospace; --sans:Inter,"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--text); font:16px/1.65 var(--sans); background:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),var(--bg); background-size:32px 32px; }
+    button:focus-visible,a:focus-visible { outline:2px solid var(--acid); outline-offset:3px; }
+    .shell { width:min(1400px,calc(100% - 32px)); margin-inline:auto; }
+    .top { position:sticky; top:0; z-index:10; background:#080908e8; backdrop-filter:blur(14px); border-bottom:1px solid var(--line); }
+    .top-inner { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { color:var(--text); text-decoration:none; font:700 14px var(--mono); display:flex; align-items:center; gap:12px; }
+    .brand i { font-style:normal; background:var(--acid); color:var(--bg); width:28px; height:28px; display:grid; place-items:center; }
+    nav { display:flex; gap:24px; }
+    nav a { color:var(--muted); text-decoration:none; font:12px var(--mono); }
+    nav a:hover { color:var(--acid); }
+    main { padding:16px 0 72px; }
+    .panel,.hero,.visual { background:var(--panel); border:1px solid var(--line); }
+    .hero { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(300px,.6fr); min-height:420px; }
+    .hero-main { padding:clamp(28px,5vw,70px); display:flex; flex-direction:column; justify-content:space-between; border-right:1px solid var(--line); }
+    .eyebrow,.meta { color:var(--acid); font:12px var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+    h1 { max-width:850px; margin:24px 0 0; font-size:clamp(46px,7vw,100px); line-height:.95; letter-spacing:-.07em; }
+    h1 span { display:block; color:#aab1a3; }
+    .lede { max-width:700px; margin:38px 0 0; color:#d0d5c8; font-size:18px; }
+    .hero-stats { display:grid; grid-template-rows:repeat(3,1fr); }
+    .stat { padding:26px 28px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; justify-content:space-between; }
+    .stat:last-child { border-bottom:0; }
+    .stat-label { color:var(--muted); font:12px var(--mono); }
+    .stat strong { font:700 clamp(28px,4vw,55px)/1 var(--mono); letter-spacing:-.06em; overflow-wrap:anywhere; }
+    .stat small { color:var(--acid); font:12px var(--mono); }
+    .visual { margin:14px 0; overflow:hidden; }
+    .visual img { display:block; width:100%; height:clamp(280px,40vw,550px); object-fit:cover; }
+    .visual figcaption { display:flex; justify-content:space-between; gap:20px; padding:15px 22px; border-top:1px solid var(--line); }
+    .visual figcaption span { color:var(--muted); font:12px var(--mono); }
+    .section { margin-top:14px; }
+    .section-head { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:20px; }
+    .section-head h2 { margin:0; font-size:20px; }
+    .section-head span { color:var(--muted); font:12px var(--mono); }
+    .intro { display:grid; grid-template-columns:1.1fr .9fr; }
+    .intro-copy { padding:30px; border-right:1px solid var(--line); }
+    .intro-copy h2 { margin:12px 0 18px; font-size:clamp(32px,4vw,55px); letter-spacing:-.05em; line-height:1.05; }
+    .intro-copy p,.goal p,.step p,.note { color:var(--muted); }
+    .intro-copy p { max-width:660px; font-size:17px; }
+    .goals { display:grid; grid-template-rows:repeat(4,1fr); }
+    .goal { padding:18px 24px; display:grid; grid-template-columns:38px 1fr; gap:12px; border-bottom:1px solid var(--line); }
+    .goal:last-child { border-bottom:0; }
+    .goal b { color:var(--acid); font:12px var(--mono); }
+    .goal h3 { margin:0 0 4px; font-size:16px; }
+    .goal p { margin:0; font-size:14px; }
+    .flow { display:grid; grid-template-columns:repeat(5,1fr); }
+    .step { padding:22px; border-right:1px solid var(--line); }
+    .step:last-child { border-right:0; }
+    .step b { color:var(--acid); font:12px var(--mono); }
+    .step h3 { margin:24px 0 6px; font-size:17px; }
+    .step p { margin:0; font-size:14px; }
+    .workspace { display:grid; grid-template-columns:1fr 1fr; }
+    .prompt-box { padding:26px; border-right:1px solid var(--line); }
+    .prompt-box h3,.candidate-box h3 { margin:0 0 12px; font-size:17px; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; font:14px/1.75 var(--mono); }
+    .prompt-text { margin:0; padding:20px; background:var(--bg); border-left:3px solid var(--acid); max-height:420px; overflow:auto; }
+    .prompt-status { display:flex; justify-content:space-between; gap:16px; margin-top:16px; color:var(--muted); font:12px var(--mono); }
+    .candidate-box { padding:26px; }
+    .candidate { border-top:1px solid var(--line); padding:18px 0; }
+    .candidate:first-of-type { border-top:0; }
+    .candidate-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .candidate-head strong { font-size:15px; }
+    .candidate p { margin:7px 0; color:var(--muted); font-size:14px; }
+    .candidate details { margin-top:12px; }
+    summary { cursor:pointer; color:var(--acid); font:12px var(--mono); }
+    .badge { border:1px solid var(--line); padding:4px 8px; font:12px var(--mono); white-space:nowrap; }
+    .badge.good { color:var(--acid); border-color:#607226; }
+    .badge.bad { color:var(--red); border-color:#703a34; }
+    .metrics { display:grid; grid-template-columns:1fr 1fr; }
+    .chart-wrap { padding:24px; border-right:1px solid var(--line); min-height:330px; }
+    #chart { display:block; width:100%; height:255px; }
+    .metric-explain { padding:24px; }
+    .metric-explain dl { display:grid; grid-template-columns:1fr auto; gap:13px; margin:0; }
+    .metric-explain dt { color:var(--muted); }
+    .metric-explain dd { margin:0; color:var(--acid); font:700 16px var(--mono); }
+    .axis { fill:var(--muted); font:12px var(--mono); }
+    .grid { stroke:#34382f; }
+    .line { fill:none; stroke:var(--acid); stroke-width:3; }
+    .dot { fill:var(--acid); }
+    .empty { color:var(--muted); padding:26px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; min-width:780px; }
+    th,td { text-align:left; padding:14px 18px; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font:12px var(--mono); }
+    td { font:13px var(--mono); }
+    tr:last-child td { border-bottom:0; }
+    .samples { display:grid; grid-template-columns:repeat(3,1fr); }
+    .sample { padding:22px; border-right:1px solid var(--line); }
+    .sample:last-child { border-right:0; }
+    .sample h3 { margin:0 0 8px; font-size:16px; }
+    .sample p { color:var(--muted); font-size:14px; }
+    .sample small { color:var(--acid); font:12px/1.6 var(--mono); }
+    .result { padding:24px; }
+    .result-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .result-grid article { border:1px solid var(--line); background:var(--bg); padding:17px; }
+    .result-grid h3 { margin:0 0 8px; font-size:15px; }
+    .result-grid pre { margin:0; max-height:320px; overflow:auto; color:#ced4c5; }
+    .notice { padding:16px 22px; border:1px solid #65742e; color:#e3edae; background:#1c2213; margin-top:14px; }
+    .notice.error { border-color:#7d3b35; color:#ffc5be; background:#261412; }
+    footer { display:flex; justify-content:space-between; gap:20px; padding:35px 0 48px; color:var(--muted); font:12px var(--mono); }
+    @media(max-width:950px) {
+      .hero,.intro,.workspace,.metrics { grid-template-columns:1fr; }
+      .hero-main,.intro-copy,.prompt-box,.chart-wrap { border-right:0; border-bottom:1px solid var(--line); }
+      .hero-stats { grid-template-columns:repeat(3,1fr); grid-template-rows:none; }
+      .stat { border-bottom:0; border-right:1px solid var(--line); }
+      .stat:last-child { border-right:0; }
+      .flow { grid-template-columns:repeat(2,1fr); }
+      .step { border-bottom:1px solid var(--line); }
+      .samples,.result-grid { grid-template-columns:1fr; }
+      .sample { border-right:0; border-bottom:1px solid var(--line); }
+    }
+    @media(max-width:650px) {
+      nav { display:none; }
+      .shell { width:calc(100% - 22px); }
+      h1 { font-size:clamp(46px,12vw,68px); }
+      .hero-main { padding:28px 22px; }
+      .hero-stats { grid-template-columns:1fr; }
+      .stat { min-height:120px; border-right:0; border-bottom:1px solid var(--line); }
+      .visual figcaption { flex-direction:column; }
+      .flow { grid-template-columns:1fr; }
+      .step { border-right:0; }
+      .section-head { flex-direction:column; align-items:flex-start; }
+      footer { flex-direction:column; }
+    }
+    @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <header class="top"><div class="shell top-inner">
+    <a class="brand" href="#top"><i>P</i>PROMPT RSI LAB</a>
+    <nav aria-label="页面导航"><a href="#project">项目</a><a href="#cycle">流程</a><a href="#experiment">实验</a><a href="#benchmark">基准</a></nav>
+    <span class="meta" id="online-status">读取实验状态…</span>
+  </div></header>
+  <main class="shell" id="top">
+    <section class="hero">
+      <div class="hero-main">
+        <div><span class="eyebrow">Recursive Prompt Improvement / 技术摘要任务</span><h1>每天进化一个<span>更好的提示词。</span></h1></div>
+        <p class="lede">系统每天生成两个候选提示词，让它们与当前冠军摘要同一批技术文章。只有测试结果确实更好，才更新冠军。</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-label">当前冠军</span><strong id="version">v0</strong><small>提示词版本</small></div>
+        <div class="stat"><span class="stat-label">实测综合分</span><strong id="score">—</strong><small>固定基准 / 满分 100</small></div>
+        <div class="stat"><span class="stat-label">最近实验</span><strong id="decision" style="font-size:clamp(24px,3vw,40px)">待运行</strong><small id="date">每天 09:00 CST</small></div>
+      </div>
+    </section>
+
+    <figure class="visual"><img src="/assets/prompt-evolution-lab.png" alt="两个候选提示词经过多道评测，汇聚为冠军提示词的实验室概念图" width="1536" height="1024"><figcaption><strong>候选 → 基准测试 → 冠军</strong><span>概念图；实际评分和输出见下方实验记录</span></figcaption></figure>
+
+    <section class="panel section intro" id="project">
+      <div class="intro-copy"><span class="eyebrow">PROJECT / 项目介绍</span><h2>一次真实的<br>提示词进化实验。</h2><p>任务是把复杂技术文章转成中文结构化摘要。系统保留一个“冠军”提示词，每天依据上一轮失分项生成两个候选，用相同模型、相同文章和相同评分规则进行对照。</p><p>技术文章、事实标签和评分代码都在项目仓库中。候选要提升至少 2 分，且事实覆盖不能下降，也不能出现预设的错误断言。失败时保留原冠军，仍记录实验结果。</p></div>
+      <div class="goals">
+        <div class="goal"><b>01</b><div><h3>保留关键事实</h3><p>摘要覆盖文章中的实体、条件、数字与限制。</p></div></div>
+        <div class="goal"><b>02</b><div><h3>稳定输出结构</h3><p>生成“结论、要点、风险、术语”四段内容。</p></div></div>
+        <div class="goal"><b>03</b><div><h3>控制长度</h3><p>目标为 80 至 450 字，减少过短遗漏与过长冗余。</p></div></div>
+        <div class="goal"><b>04</b><div><h3>保留证据</h3><p>记录候选 Prompt、摘要、评分明细和晋级理由。</p></div></div>
+      </div>
+    </section>
+
+    <section class="panel section" id="cycle"><div class="section-head"><h2>每日自进化流程</h2><span>CLOUDFLARE CRON · 01:00 UTC / 09:00 CST</span></div><div class="flow">
+      <div class="step"><b>01 / 诊断</b><h3>读取失分</h3><p>找到上一轮遗漏的事实标签和被拒绝原因。</p></div>
+      <div class="step"><b>02 / 变异</b><h3>生成两个 Prompt</h3><p>Workers AI 生成完整候选，逐个验证结构与差异。</p></div>
+      <div class="step"><b>03 / 执行</b><h3>生成真实摘要</h3><p>冠军和候选处理同一组文章，保留逐篇输出。</p></div>
+      <div class="step"><b>04 / 评测</b><h3>计算可复查分数</h3><p>对事实关键词、四段结构、长度与禁用断言评分。</p></div>
+      <div class="step"><b>05 / 选择</b><h3>接受或保留</h3><p>过门槛则升级冠军，否则保留旧版并记录原因。</p></div>
+    </div></section>
+
+    <section class="panel section" id="experiment"><div class="section-head"><h2>当前冠军与最新候选</h2><span id="run-state">等待数据</span></div><div class="workspace">
+      <div class="prompt-box"><h3 id="champion-title">冠军提示词 · v0</h3><pre class="prompt-text" id="champion-prompt">正在读取…</pre><div class="prompt-status"><span id="champion-score">尚未评测</span><span id="updated-at">—</span></div></div>
+      <div class="candidate-box"><h3>当日候选与选择理由</h3><div id="candidates" class="empty">首次实验完成后展示真实候选 Prompt 和分数。</div></div>
+    </div></section>
+
+    <section class="panel section"><div class="section-head"><h2>实测评分趋势</h2><span>最近 30 次实验</span></div><div class="metrics"><div class="chart-wrap"><svg id="chart" viewBox="0 0 700 255" role="img" aria-label="真实实验综合分趋势图"></svg><p class="note" id="chart-note">等待首轮实测数据。</p></div><div class="metric-explain"><dl><dt>事实关键词覆盖</dt><dd>60%</dd><dt>四段格式</dt><dd>20%</dd><dt>80–450 字内精简度</dt><dd>20%</dd><dt>禁用断言</dt><dd>每项 -15</dd></dl><p class="note">评分是可复查的自动化代理指标；关键词匹配无法完全判断语义事实，也不等同人工质量评审。</p><p class="note" id="reason">最近结果：等待实验。</p></div></div></section>
+
+    <section class="panel section"><div class="section-head"><h2>每日实验账本</h2><span>真实执行记录</span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>冠军版本</th><th>实测分</th><th>结果</th><th>改进焦点</th></tr></thead><tbody id="history"><tr><td colspan="5">首次实验完成后生成记录。</td></tr></tbody></table></div></section>
+
+    <section class="panel section" id="benchmark"><div class="section-head"><h2>公开基准文章</h2><span>3 篇原创技术短文 / 固定事实标签</span></div><div id="samples" class="samples"></div></section>
+
+    <section class="panel section"><div class="section-head"><h2>最近一次摘要输出</h2><span>逐篇保留原文生成结果</span></div><div id="outputs" class="result"><p class="note">首次实验完成后展示冠军版本生成的摘要。</p></div></section>
+    <div id="notice" class="notice">Cloudflare 每天自动运行一次；页面读取线上实验状态。GitHub 保存代码与每日快照。</div>
+  </main>
+  <footer class="shell"><span>PROMPT RSI LAB · REAL EXPERIMENTS</span><span>Cloudflare Workers AI + KV + Cron / GitHub Actions</span></footer>
+  <script>
+    const $ = selector => document.querySelector(selector);
+    const make = (tag, text, className) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; };
+    const number = value => typeof value === "number" ? value.toFixed(1) : "—";
+    function drawChart(history) {
+      const svg = $("#chart"); svg.replaceChildren();
+      if (!history.length) return;
+      const values = history.map(item => Number(item.score));
+      const min = Math.max(0, Math.floor(Math.min(...values) / 10) * 10 - 10);
+      const x = i => 42 + i * 630 / Math.max(1, history.length - 1);
+      const y = value => 210 - (value - min) / Math.max(1, 100 - min) * 180;
+      const ns = "http://www.w3.org/2000/svg";
+      const add = (tag, attrs) => { const node = document.createElementNS(ns, tag); Object.entries(attrs).forEach(([key,value]) => node.setAttribute(key,String(value))); svg.append(node); return node; };
+      for (const tick of [0,0.5,1]) {
+        const yy = 30 + tick * 180;
+        add("line",{x1:42,y1:yy,x2:672,y2:yy,class:"grid"});
+        add("text",{x:2,y:yy+4,class:"axis"}).textContent = Math.round(100-tick*(100-min));
+      }
+      add("polyline",{points:history.map((item,i)=>`${x(i)},${y(item.score)}`).join(" "),class:"line"});
+      history.forEach((item,i)=>{
+        const circle=add("circle",{cx:x(i),cy:y(item.score),r:5,class:"dot"});
+        add("title",{}).textContent = `${item.date} · ${item.score} 分`;
+        circle.setAttribute("aria-label",`${item.date}，${item.score} 分`);
+        if (history.length <= 8 || i === 0 || i === history.length-1) add("text",{x:x(i),y:238,"text-anchor":"middle",class:"axis"}).textContent=item.date.slice(5);
+      });
+      $("#chart-note").textContent = `基准综合分：${history.length} 次真实实验。每天重新评测当前冠军。`;
+    }
+    function render(state) {
+      const run=state.latestRun, champion=state.champion;
+      $("#online-status").textContent = run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
+      $("#version").textContent = champion.version;
+      $("#score").textContent = number(champion.score);
+      $("#decision").textContent = run?.status === "completed" ? (run.accepted ? "已晋级" : "保留冠军") : run?.status === "failed" ? "运行失败" : "待运行";
+      $("#date").textContent = run?.date || "每天 09:00 CST";
+      $("#champion-title").textContent = `冠军提示词 · ${champion.version}`;
+      $("#champion-prompt").textContent = champion.prompt;
+      $("#champion-score").textContent = champion.score == null ? "尚未评测" : `实测 ${number(champion.score)} / 100`;
+      $("#updated-at").textContent = state.updatedAt ? new Date(state.updatedAt).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai",hour12:false})+" CST" : "等待首轮";
+      $("#run-state").textContent = run?.status === "completed" ? `${run.date} · ${run.model}` : "尚无成功运行";
+      $("#reason").textContent = run?.status === "completed" ? `最近结果：${run.reason}` : "最近结果：等待实验。";
+      const candidates=$("#candidates"); candidates.replaceChildren();
+      if (run?.candidates?.length) run.candidates.forEach(item=>{
+        const card=make("article",null,"candidate");
+        const head=make("div",null,"candidate-head");
+        head.append(make("strong",`${item.id} · ${item.hypothesis}`),make("span",`${number(item.metrics.score)} 分 · ${item.eligible ? "达标" : "未达标"}`,`badge ${item.eligible ? "good" : "bad"}`));
+        card.append(head,make("p",item.reason),make("p",`事实覆盖 ${Math.round(item.metrics.coverage*100)}% · 格式 ${Math.round(item.metrics.format*100)}% · 平均 ${item.metrics.characters} 字`));
+        const details=make("details"); details.append(make("summary","查看完整候选 Prompt"),make("pre",item.prompt)); card.append(details); candidates.append(card);
+      });
+      else candidates.append(make("p","首次实验完成后展示真实候选 Prompt 和分数。","note"));
+      drawChart(state.history || []);
+      const tbody=$("#history"); tbody.replaceChildren();
+      if (state.history?.length) [...state.history].reverse().forEach(item=>{
+        const row=make("tr");
+        [item.date,`v${item.generation}`,number(item.score),item.accepted?"候选晋级":"保留冠军",item.focus].forEach(value=>row.append(make("td",value)));
+        tbody.append(row);
+      }); else { const row=make("tr"), cell=make("td","首次实验完成后生成记录。"); cell.colSpan=5; row.append(cell); tbody.append(row); }
+      const samples=$("#samples"); samples.replaceChildren();
+      (state.benchmark || []).forEach(item=>{const card=make("article",null,"sample");card.append(make("h3",item.title),make("p",item.article),make("small",`核对标签：${item.anchors.join(" / ")}`));samples.append(card);});
+      const outputs=$("#outputs"); outputs.replaceChildren();
+      const current=run?.accepted ? run.candidates.find(item=>item.id===run.selectedId)?.metrics : run?.baseline;
+      if (current?.outputs?.length) {
+        const grid=make("div",null,"result-grid");
+        current.outputs.forEach(item=>{const card=make("article");card.append(make("h3",`${item.title} · ${item.score} 分`),make("pre",item.summary),make("p",`遗漏：${item.missing.join("、") || "无"}；禁用断言：${item.forbidden.join("、") || "无"}`,"note"));grid.append(card);});
+        outputs.append(grid);
+      } else outputs.append(make("p","首次实验完成后展示冠军版本生成的摘要。","note"));
+      const notice=$("#notice");
+      if(run?.status==="failed") { notice.classList.add("error"); notice.textContent=`最近实验失败：${run.error}。当前冠军没有被替换；下一次定时运行将重试。`; }
+      else notice.textContent="Cloudflare 每天自动运行一次；页面读取线上实验状态。GitHub 保存代码与每日快照。";
+    }
+    fetch("/api/evolution",{cache:"no-store"}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}).then(render).catch(error=>{
+      $("#online-status").textContent="OFFLINE / 数据读取失败";
+      const notice=$("#notice");notice.classList.add("error");notice.textContent=`无法读取实验数据：${error.message}`;
+    });
+  </script>
+</body>
+</html>

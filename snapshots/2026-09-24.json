@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 2,
+  "generation": 0,
+  "champion": {
+    "version": "v0",
+    "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：\n结论：一句话概括。\n要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件。\n风险：写出原文提到的限制；没有则写“原文未说明”。\n术语：解释首次出现的关键技术术语；原文信息不足时写“原文未说明”。\n禁止补充原文以外的信息。全文不超过 450 字。",
+    "score": 94.7
+  },
+  "latestRun": {
+    "id": "7988c21f-e69c-4f2b-8cfe-9bca984fdc71",
+    "date": "2026-09-24",
+    "status": "completed",
+    "startedAt": "2026-09-23T18:18:55.884Z",
+    "completedAt": "2026-09-23T18:19:00.912Z",
+    "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+    "benchmarkIds": [
+      "postgres-replica",
+      "http-cache",
+      "passkeys"
+    ],
+    "baseline": {
+      "score": 94.7,
+      "coverage": 1,
+      "format": 1,
+      "characters": 181,
+      "forbidden": [],
+      "missing": [],
+      "outputs": [
+        {
+          "sampleId": "postgres-replica",
+          "title": "异步只读副本",
+          "summary": "**结论**：该设计通过主从复制提升读性能，但无法保证副本的即时一致性。\n\n**要点**：  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。  \n\n**风险**：用户刚下单后立即查询副本，可能短时间看不到订单。\n\n**术语**：  \n1. **异步复制**：数据库主从之间数据复制的方式，数据更新后不会立即同步到从库。",
+          "score": 95,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.73,
+          "characters": 180,
+          "forbidden": [],
+          "missing": []
+        },
+        {
+          "sampleId": "http-cache",
+          "title": "HTTP 条件请求",
+          "summary": "**结论**：ETag 机制可减少重复传输，但首次请求仍需完整资源。\n\n**要点**：  \n1. 服务器在响应中返回 ETag。  \n2. 客户端下次请求携带 If-None-Match。  \n3. 若资源未变化，服务器返回 304 且不发送响应正文。  \n\n**风险**：原文未说明  \n\n**术语**：ETag：服务器维护的资源标识符，用于判断内容是否变化。",
+          "score": 96,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.8,
+          "characters": 154,
+          "forbidden": [],
+          "missing": []
+        },
+        {
+          "sampleId": "passkeys",
+          "title": "通行密钥登录",
+          "summary": "**结论**：WebAuthn 登录通过私钥签名实现安全认证，但设备丢失仍需依赖恢复方式。\n\n**要点**：  \n1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 设备丢失需事先配置的恢复方式。\n\n**风险**：原文未说明。\n\n**术语**：  \n1. **WebAuthn**：一种用于网页认证的开放标准，允许用户通过生物识别或硬件密钥进行安全登录。",
+          "score": 93,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.651,
+          "characters": 209,
+          "forbidden": [],
+          "missing": []
+        }
+      ]
+    },
+    "candidates": [
+      {
+        "id": "C1",
+        "prompt": "你是一名严谨的技术编辑。严格基于文章内容，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。",
+        "hypothesis": "将‘只依据给出的文章’改为‘严格基于文章内容’以增强严谨性",
+        "metrics": {
+          "score": 92,
+          "coverage": 0.933,
+          "format": 1,
+          "characters": 154,
+          "forbidden": [],
+          "missing": [
+            "短时间"
+          ],
+          "outputs": [
+            {
+              "sampleId": "postgres-replica",
+              "title": "异步只读副本",
+              "summary": "结论：该设计通过主从复制提升读吞吐量，但不保证副本即时一致性。\n\n要点：  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。\n\n风险：原文未说明。\n\n术语：异步复制：指数据从主库传输到副本的过程，不保证实时同步。",
+              "score": 85,
+              "coverage": 0.8,
+              "format": 1,
+              "efficiency": 0.859,
+              "characters": 132,
+              "forbidden": [],
+              "missing": [
+                "短时间"
+              ]
+            },
+            {
+              "sampleId": "http-cache",
+              "title": "HTTP 条件请求",
+              "summary": "结论：ETag 机制可减少重复传输，但首次请求需获取完整资源。\n\n要点：  \n1. 服务器在响应中返回 ETag。  \n2. 客户端下次请求携带 If-None-Match。  \n3. 若资源未变化，服务器返回 304 且不发送响应正文。\n\n风险：原文未说明\n\n术语：ETag：一种由服务器生成的标识符，用于标识资源的特定版本。",
+              "score": 97,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.835,
+              "characters": 141,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "passkeys",
+              "title": "通行密钥登录",
+              "summary": "**结论：** WebAuthn 登录通过私钥签名和公钥验证实现安全认证。\n\n**要点：**  \n1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对 challenge 签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 若设备丢失，需事先配置恢复方式。\n\n**风险：** 原文未说明\n\n**术语：** WebAuthn：一种基于公开密钥加密的认证协议，用于安全登录。",
+              "score": 94,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.708,
+              "characters": 188,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "eligible": false,
+        "reason": "事实覆盖低于当日冠军"
+      },
+      {
+        "id": "C2",
+        "prompt": "你是一名严谨的技术编辑。禁止补充原文以外的信息。用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。全文不超过 450 字。",
+        "hypothesis": "将‘禁止补充原文以外的信息’提前至开头以强调规则",
+        "metrics": {
+          "score": 85.3,
+          "coverage": 0.8,
+          "format": 1,
+          "characters": 132,
+          "forbidden": [],
+          "missing": [
+            "短时间",
+            "首次请求",
+            "恢复"
+          ],
+          "outputs": [
+            {
+              "sampleId": "postgres-replica",
+              "title": "异步只读副本",
+              "summary": "结论：订单服务通过主库写入和异步复制的只读副本提升读性能，但不保证一致性。\n\n要点：  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求回退主库。  \n\n风险：原文未说明  \n\n术语：  \n1. 异步复制：原文未说明",
+              "score": 86,
+              "coverage": 0.8,
+              "format": 1,
+              "efficiency": 0.892,
+              "characters": 120,
+              "forbidden": [],
+              "missing": [
+                "短时间"
+              ]
+            },
+            {
+              "sampleId": "http-cache",
+              "title": "HTTP 条件请求",
+              "summary": "结论：ETag 机制用于判断资源是否变化，减少重复传输。\n\n要点：  \n1. 客户端下次请求携带 If-None-Match。  \n2. 服务器返回 304 时不再发送响应正文。  \n3. ETag 由服务端维护，不能仅凭文件名判断内容是否变化。  \n\n风险：原文未说明  \n\n术语：ETag - 服务器生成的标识符，用于标识资源的特定版本。",
+              "score": 85,
+              "coverage": 0.8,
+              "format": 1,
+              "efficiency": 0.832,
+              "characters": 142,
+              "forbidden": [],
+              "missing": [
+                "首次请求"
+              ]
+            },
+            {
+              "sampleId": "passkeys",
+              "title": "通行密钥登录",
+              "summary": "结论：WebAuthn 登录通过私钥签名验证用户身份。\n\n要点：  \n1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n\n风险：原文未说明  \n\n术语：WebAuthn - 一种用于安全身份验证的开放标准，允许用户通过生物识别或硬件密钥登录。",
+              "score": 85,
+              "coverage": 0.8,
+              "format": 1,
+              "efficiency": 0.851,
+              "characters": 135,
+              "forbidden": [],
+              "missing": [
+                "恢复"
+              ]
+            }
+          ]
+        },
+        "eligible": false,
+        "reason": "事实覆盖低于当日冠军"
+      }
+    ],
+    "accepted": false,
+    "selectedId": null,
+    "championVersion": "v0",
+    "championScore": 94.7,
+    "reason": "按修正后的评分器重算；所有候选未通过晋级门槛",
+    "scorerVersion": 3,
+    "rescoredAt": "2026-09-23T18:24:32.073Z"
+  },
+  "history": [
+    {
+      "date": "2026-09-24",
+      "generation": 0,
+      "score": 94.7,
+      "accepted": false,
+      "focus": "保持冠军"
+    }
+  ],
+  "updatedAt": "2026-09-23T18:24:32.073Z",
+  "benchmark": [
+    {
+      "id": "postgres-replica",
+      "title": "异步只读副本",
+      "article": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。副本故障时读请求会回退主库。这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+      "anchors": [
+        "PostgreSQL",
+        "异步复制",
+        "短时间",
+        "回退主库",
+        "不保证"
+      ]
+    },
+    {
+      "id": "http-cache",
+      "title": "HTTP 条件请求",
+      "article": "服务器在响应中返回 ETag。客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。ETag 由服务端维护，不能仅凭文件名判断内容是否变化。该机制减少重复传输，但首次请求仍需获取完整资源。",
+      "anchors": [
+        "ETag",
+        "If-None-Match",
+        "304",
+        "响应正文",
+        "首次请求"
+      ]
+    },
+    {
+      "id": "passkeys",
+      "title": "通行密钥登录",
+      "article": "WebAuthn 登录时，服务器生成一次性 challenge。认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。私钥留在用户设备，不会发送给网站。若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+      "anchors": [
+        "WebAuthn",
+        "challenge",
+        "私钥",
+        "公钥",
+        "恢复"
+      ]
+    }
+  ],
+  "scoring": "事实关键词覆盖 60% + 四段格式 20% + 80–450 字内的精简度 20%；命中禁用断言每项扣 15 分。候选需提升至少 2 分、事实覆盖不下降、无禁用断言。"
+}
