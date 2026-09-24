@@ -23,6 +23,11 @@ function fakeEnvironment({ fail = false, holdoutFail = false } = {}) {
       async run(_model, input) {
         calls++;
         if (fail) throw new Error("model unavailable");
+        if (input.temperature === 0.65 || input.temperature === 0.7) {
+          const proposalInput = JSON.stringify(input.messages);
+          assert.ok(samples.filter(item => item.id.includes("2026-")).every(item => !proposalInput.includes(item.article)),
+            "the proposal model must not see holdout articles");
+        }
         if (input.temperature === 0.65) return { response: JSON.stringify({
           hypothesis: "先核对关键条件比先压缩长度更稳健",
           instruction: "先从最近开发集失分中识别遗漏的实体、数字和限制，再提出只针对一类遗漏的改写；保留原文忠实性和四段结构，并在生成前检查是否复制了旧候选。"

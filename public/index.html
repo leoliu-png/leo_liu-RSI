@@ -265,6 +265,7 @@
         card.append(head,make("p",item.reason),make("p",`事实覆盖 ${Math.round(item.metrics.coverage*100)}% · 格式 ${Math.round(item.metrics.format*100)}% · 平均 ${item.metrics.characters} 字`));
         if(item.holdout) card.append(make("p",`生成策略 ${item.strategyVersion} · 新文章 ${number(item.holdout.score)} 分，事实覆盖 ${Math.round(item.holdout.coverage*100)}%`));
         const details=make("details"); details.append(make("summary","查看完整候选 Prompt"),make("pre",item.prompt)); card.append(details); candidates.append(card);
+        if(item.metrics.outputs?.length){const evidence=make("details");evidence.append(make("summary","查看开发集逐篇摘要"));item.metrics.outputs.forEach(output=>{evidence.append(make("h4",`${output.title} · ${output.score} 分`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));});card.append(evidence);}
       });
       else candidates.append(make("p","首次实验完成后展示真实候选 Prompt 和分数。","note"));
       drawChart(state.history || []);
@@ -290,7 +291,7 @@
         [{label:"当天冠军",data:run.holdoutBaseline},...run.candidates.map(candidate=>({label:candidate.id,data:candidate.holdout}))].forEach(version=>{
           const output=version.data?.outputs?.find(result=>result.sampleId===item.id);
           if(!output)return;
-          const details=make("details");details.append(make("summary",`${version.label} · ${output.score} 分 · 查看摘要`),make("pre",output.summary));card.append(details);
+          const details=make("details");details.append(make("summary",`${version.label} · ${output.score} 分 · 查看摘要`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));card.append(details);
         });
         validationSamples.append(card);
       });
