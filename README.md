@@ -40,11 +40,11 @@ Cloudflare Cron 每天 01:00 UTC（北京时间 09:00）运行：
     npm run check
     npm run dev
 
-本地访问 <http://localhost:8787>。Workers AI 绑定会调用线上模型，本地开发也可能消耗 Cloudflare 用量。部署到 Leo 账号现有的 `rsi-evolution-lab` Worker：
+本地访问 <http://localhost:8787>。Workers AI 绑定会调用线上模型，本地开发也可能消耗 Cloudflare 用量。Cloudflare Builds 连接 GitHub 仓库 `leoliu-png/leo_liu-RSI`：生产分支为 `main`、根目录为 `/`、构建命令为 `npm ci && npm test`、部署命令为 `npx wrangler deploy`。向 `main` 推送代码后，Cloudflare 应自动测试并发布到现有的 `rsi-evolution-lab` Worker；是否成功以 Cloudflare 构建记录和线上页面为准。手动部署保留作故障恢复手段：
 
     npm run deploy
 
-`RUN_TOKEN` Cloudflare Secret 保护手动运行 `/api/admin/run` 和旧版评分修正 `/api/admin/rescore`；不要将令牌提交到 Git。正常每日运行由 Cron 自动触发。同一天已完成的实验不会重复运行。代码变更仍需重新部署；每日 KV 数据更新无需重新部署网页。
+`RUN_TOKEN` Cloudflare Secret 保护手动运行 `/api/admin/run` 和旧版评分修正 `/api/admin/rescore`；不要将令牌提交到 Git。正常每日运行由 Cron 自动触发。同一天已完成的实验不会重复运行。代码变更需要成功构建并发布；每日 KV 数据更新无需重新部署网页。GitHub Actions 每日提交的 `snapshots/` 文件不改变 Worker 代码，建议在 Cloudflare Builds 的构建监视路径中排除 `snapshots/*`，避免无效重复部署。
 
 ## 主要文件
 
