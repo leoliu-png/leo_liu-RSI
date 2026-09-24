@@ -13,7 +13,9 @@ const today = new Intl.DateTimeFormat("sv-SE", {
 if (data.latestRun?.status !== "completed" || data.latestRun.date !== today) {
   throw new Error(`No completed experiment for ${today}; snapshot was not created`);
 }
-if (!Array.isArray(data.latestRun.candidates) || !data.latestRun.baseline?.outputs) {
+if (data.schemaVersion !== 3 || !Array.isArray(data.latestRun.candidates) || !data.latestRun.baseline?.outputs ||
+    !data.latestRun.holdoutBaseline?.outputs || !Array.isArray(data.latestRun.validationSamples) ||
+    !data.latestRun.strategyTrial || !data.latestRun.candidates.every(item => item.holdout?.outputs)) {
   throw new Error("Experiment response is missing evaluation evidence");
 }
 await mkdir(new URL("../snapshots/", import.meta.url), { recursive: true });

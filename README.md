@@ -1,57 +1,57 @@
-# Prompt RSI Lab
+# Prompt RSI Lab：双层提示词进化实验
 
-一个真实运行的、范围受控的递归式自我改进（RSI）实验：优化“将技术文章写成四段式中文摘要”的提示词。线上网站：[rsi-evolution-lab.leoliu-dev.workers.dev](https://rsi-evolution-lab.leoliu-dev.workers.dev)。
+一个范围受控、真实运行的 RSI 演示：第一层优化“技术文章四段式中文摘要”的任务提示词；第二层优化**产生候选提示词的方法**。线上网站：[rsi-evolution-lab.leoliu-dev.workers.dev](https://rsi-evolution-lab.leoliu-dev.workers.dev)。
 
 ## 每日闭环
 
 Cloudflare Cron 每天 01:00 UTC（北京时间 09:00）运行：
 
-1. 读取 KV 中的当前冠军提示词与上次失分。
-2. 使用 Workers AI 生成两个新的完整候选提示词。
-3. 冠军和两个候选分别摘要 [3 篇固定技术短文](src/benchmark.js)，保存全部输出。
-4. 按相同规则计算事实关键词覆盖率、四段格式与长度分，并扣除禁用断言。
-5. 候选综合分比当天冠军高至少 2 分、事实覆盖不下降、无禁用断言时，才更新冠军。否则保留旧版。
-6. 将完整实验与最近 30 次趋势写入 Cloudflare KV，网站通过 /api/evolution 展示。
-7. GitHub Actions 于 02:00 UTC 读取当天已完成的实验，提交 snapshots/YYYY-MM-DD.json。若当天实验未完成，归档任务失败并保留错误信号，不生成虚假记录。
+1. 从 KV 读取当前冠军 Prompt、当前候选生成策略和最近开发集失败记录。旧版 v2 状态会迁移到 v3，原始 KV 键不会删除。
+2. 若没有试用中的挑战策略，Workers AI 根据历次开发集失败原因提出一条新策略。当前策略与挑战策略各生成一个完整 Prompt 候选。
+3. 冠军和两个候选分别处理 3 篇固定的公开开发文章，以及当天按日期生成的 2 篇参数化验证文章。生成候选的模型不接收当天验证文章或其逐篇结果。
+4. 保存每篇摘要和事实标签覆盖、四段格式、长度、禁用断言分数。开发集至少提升 2 分，且新文章综合分和事实覆盖都不下降、没有禁用断言时，Prompt 才能晋级；否则保留旧冠军。
+5. 比较两条生成策略的配对表现。挑战策略在最多 3 个不同日期的试验中胜出至少 2 次才晋级；否则回退。一次运气好的候选不会立即替换策略。
+6. 将两层决策和逐篇证据写入 Cloudflare KV，网站经 `/api/evolution` 展示。GitHub Actions 于 02:00 UTC（北京时间 10:00）运行代码测试，并归档当天的线上结果到 `snapshots/YYYY-MM-DD.json`。
 
-网站展示的分数来自真实模型输出，没有随日期自动上涨的模拟数据。模型使用 [Cloudflare Workers AI 的 Qwen3 30B A3B](https://developers.cloudflare.com/workers-ai/models/qwen3-30b-a3b-fp8/)；每轮最多 10 次模型调用。
+每天最多约 18 次 Workers AI 调用，实际用量取决于模型的输入和输出长度。模型为 `@cf/qwen/qwen3-30b-a3b-fp8`。网站没有按日期自动上涨的模拟分数。
 
-## 评分边界
+## 为什么称为“双层”
 
-自动评分是一个可复查的代理指标，不等于完整的语义事实核查：
+- **任务层**：摘要 Prompt 候选必须在公开开发文章上变好，并在当日新文章上不退步。
+- **改进方法层**：产生候选的策略也可提出挑战、配对测试、多日晋级或回退。策略只从开发集失败记录学习，不直接读取当天验证文章。
 
-- 事实标签命中：60%。
+自动评分仍只是可复查的代理指标，不是语义事实核查。固定开发集可能被过拟合；新文章来自四种人工编写的技术主题模板，每天变换样本组合和数字，但模板会重复。由于验证结果参与晋级和策略比较，它也**不是永久隔离的最终测试集**。要用于严肃质量承诺，还需要独立真实文章、人工复核以及更长时间的外部验证。
+
+## 评分与晋级边界
+
+- 事实标签覆盖：60%。
 - “结论、要点、风险、术语”四段格式：20%。
 - 去空白后 80–450 字内，越精简得分越高：20%。
-- 命中预设错误断言：每项扣 15 分，并禁止该候选晋级。
+- 命中预设错误断言：每项扣 15 分，同时禁止对应候选晋级。
+- Prompt 晋级：开发集综合分至少比当日冠军高 2 分、事实覆盖不下降；新文章综合分和事实覆盖不下降，无禁用断言。
+- 策略晋级：挑战策略与当前策略在同一天的候选上配对比较；开发集至少高 2 分、新文章至少高 1 分，两个集合事实覆盖不下降且无禁用断言，记一次胜出。最多试用 3 天，累计 2 次胜出才替换当前策略。
 
-测试文章、关键词别名和禁用断言都在 src/benchmark.js。更改基准集会影响分数可比性，应作为新的实验版本记录。固定基准长期使用也可能过拟合；实际扩展时应增加保密留出集和人工复核。
+测试文本、关键词别名和禁用断言分别位于 `src/benchmark.js` 与 `src/holdout.js`。修改评分器或数据分布会影响分数可比性，应作为新的实验版本记录。
 
-## 开发
+## 开发与部署
 
     npm ci
     npm test
     npm run check
     npm run dev
 
-本地访问 http://localhost:8787。Workers AI 绑定调用线上模型，可能产生 Cloudflare 用量。Cron 可通过 Wrangler 本地计划事件路由测试。
-
-## 部署与首次运行
-
-项目绑定 Leo 账号下的 KV 命名空间，配置在 wrangler.jsonc。运行：
+本地访问 <http://localhost:8787>。Workers AI 绑定会调用线上模型，本地开发也可能消耗 Cloudflare 用量。部署到 Leo 账号现有的 `rsi-evolution-lab` Worker：
 
     npm run deploy
-    npx wrangler secret put RUN_TOKEN
 
-RUN_TOKEN 仅用于管理员手动启动首轮或故障重试，不要提交到 Git。向 /api/admin/run 发送 POST，携带 Authorization: Bearer <RUN_TOKEN> 即可；同一天已完成的实验会跳过。正常每日运行由 Cron 自动触发，不需要该令牌。
-
-GitHub Actions 使用仓库自带的 GITHUB_TOKEN 提交归档，不需要 Cloudflare API Token。网站每日直接读取 KV，因此每次实验后无需重新部署静态文件。代码修改后仍需运行 npm run deploy。
+`RUN_TOKEN` Cloudflare Secret 保护手动运行 `/api/admin/run` 和旧版评分修正 `/api/admin/rescore`；不要将令牌提交到 Git。正常每日运行由 Cron 自动触发。同一天已完成的实验不会重复运行。代码变更仍需重新部署；每日 KV 数据更新无需重新部署网页。
 
 ## 主要文件
 
-- src/benchmark.js：测试文章、事实标签、初始 Prompt 与模型。
-- src/evolution.js：候选生成、真实摘要、评分、晋级与 KV 持久化。
-- src/index.js：公开 API、受令牌保护的手动触发入口与 Cron 处理。
-- public/index.html：线上实验控制台。
-- scripts/snapshot.mjs：GitHub 每日实验归档。
-- test/evolution.test.js：晋级、幂等、失败保留冠军测试。
+- `src/benchmark.js`：固定公开开发文章、事实标签、初始 Prompt 与模型。
+- `src/holdout.js`：每日参数化验证文章，候选生成器不接收文章内容。
+- `src/evolution.js`：双层候选、真实模型输出、评分、独立晋级/回退与 KV 持久化。
+- `src/index.js`：公开 API、受令牌保护的管理入口、Cron 处理。
+- `public/index.html`：线上实验控制台，展示策略对照、新文章验证和逐篇证据。
+- `test/evolution.test.js`：评分、晋级、回退、两胜门槛、旧数据迁移与幂等测试；AI 在代码测试中由模拟对象代替。
+- `scripts/snapshot.mjs`：GitHub 每日实测结果归档。

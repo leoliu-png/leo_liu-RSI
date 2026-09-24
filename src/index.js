@@ -24,7 +24,7 @@ export default {
     try {
       if (path === "/api/evolution" && request.method === "GET") return json(publicState(await getState(env)));
       if (path === "/api/health" && request.method === "GET") {
-        return json({ ok: true, version: 2, now: new Date().toISOString() });
+        return json({ ok: true, version: 3, now: new Date().toISOString() });
       }
       if (path === "/api/admin/run" && request.method === "POST") {
         const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
