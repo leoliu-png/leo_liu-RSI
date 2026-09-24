@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const endpoint = process.env.RSI_SITE_URL || "https://rsi-evolution-lab.leoliu-dev.workers.dev";
 const response = await fetch(new URL("/api/evolution", endpoint), {
@@ -13,12 +13,27 @@ const today = new Intl.DateTimeFormat("sv-SE", {
 if (data.latestRun?.status !== "completed" || data.latestRun.date !== today) {
   throw new Error(`No completed experiment for ${today}; snapshot was not created`);
 }
-if (data.schemaVersion !== 3 || !Array.isArray(data.latestRun.candidates) || !data.latestRun.baseline?.outputs ||
-    !data.latestRun.holdoutBaseline?.outputs || !Array.isArray(data.latestRun.validationSamples) ||
-    !data.latestRun.strategyTrial || !data.latestRun.candidates.every(item => item.holdout?.outputs)) {
-  throw new Error("Experiment response is missing evaluation evidence");
-}
-await mkdir(new URL("../snapshots/", import.meta.url), { recursive: true });
 const target = new URL(`../snapshots/${today}.json`, import.meta.url);
-await writeFile(target, `${JSON.stringify(data, null, 2)}\n`);
-console.log(`Saved evidence for ${today}: ${data.latestRun.reason}`);
+const hasFullEvidence = data.schemaVersion === 3 && Array.isArray(data.latestRun.candidates) &&
+  Array.isArray(data.latestRun.baseline?.outputs) && Array.isArray(data.latestRun.holdoutBaseline?.outputs) &&
+  Array.isArray(data.latestRun.validationSamples) && data.latestRun.strategyTrial &&
+  data.latestRun.candidates.every(item => Array.isArray(item.holdout?.outputs));
+if (!hasFullEvidence) {
+  let archived;
+  try {
+    archived = JSON.parse(await readFile(target, "utf8"));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (data.schemaVersion === 3 && archived?.schemaVersion === 2 &&
+      archived.latestRun?.id === data.latestRun.id && archived.latestRun?.date === today &&
+      archived.latestRun?.status === "completed") {
+    console.log(`Legacy experiment for ${today} is already archived; waiting for the next scheduled v3 run`);
+  } else {
+    throw new Error("Experiment response is missing evaluation evidence");
+  }
+} else {
+  await mkdir(new URL("../snapshots/", import.meta.url), { recursive: true });
+  await writeFile(target, `${JSON.stringify(data, null, 2)}\n`);
+  console.log(`Saved evidence for ${today}: ${data.latestRun.reason}`);
+}
