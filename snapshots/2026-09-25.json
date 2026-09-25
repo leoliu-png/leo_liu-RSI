@@ -1,0 +1,455 @@
+{
+  "schemaVersion": 3,
+  "generation": 1,
+  "champion": {
+    "version": "v1",
+    "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。",
+    "score": 95.3
+  },
+  "strategy": {
+    "version": "s0",
+    "hypothesis": "针对事实遗漏与冗长问题，只做一处可验证的提示词修改",
+    "instruction": "先分析最近几轮在公开开发集上的遗漏事实、禁用断言、格式和长度问题。只提出一个明确的改进假设；候选仍须忠于原文、保留四段标题。不要根据未公开验证文章猜测内容。"
+  },
+  "challenger": {
+    "id": "54ee9c67-0e2d-4e2a-bc57-f4494ff258f3",
+    "hypothesis": "通过在提示词中显式强调‘保留原文核心事实’和‘避免推测性信息’，可以减少因过度概括或添加未提及内容而导致的遗漏事实和禁用断言问题。",
+    "instruction": "在生成候选提示词时，明确要求保留原文四段标题结构，并在每个段落中仅使用原文中已提及的事实和表述，禁止添加任何未在原文中出现的信息或推测性内容。",
+    "trials": [
+      {
+        "date": "2026-09-25",
+        "incumbent": "s0",
+        "challengerId": "54ee9c67-0e2d-4e2a-bc57-f4494ff258f3",
+        "incumbentDevelopmentScore": 95.3,
+        "challengerDevelopmentScore": 95.3,
+        "incumbentHoldoutScore": 96.5,
+        "challengerHoldoutScore": 96,
+        "challengerWon": false
+      }
+    ]
+  },
+  "strategyHistory": [
+    {
+      "date": "2026-09-25",
+      "incumbent": "s0",
+      "challengerId": "54ee9c67-0e2d-4e2a-bc57-f4494ff258f3",
+      "incumbentDevelopmentScore": 95.3,
+      "challengerDevelopmentScore": 95.3,
+      "incumbentHoldoutScore": 96.5,
+      "challengerHoldoutScore": 96,
+      "challengerWon": false
+    }
+  ],
+  "latestRun": {
+    "id": "3f642383-89fc-4f1f-8d4b-8f37464b00c4",
+    "schemaVersion": 3,
+    "date": "2026-09-25",
+    "status": "completed",
+    "startedAt": "2026-09-25T01:00:49.583Z",
+    "completedAt": "2026-09-25T01:00:58.138Z",
+    "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+    "scorerVersion": 3,
+    "benchmarkIds": [
+      "postgres-replica",
+      "http-cache",
+      "passkeys"
+    ],
+    "validationSamples": [
+      {
+        "id": "object-2026-09-25",
+        "title": "对象存储清理",
+        "article": "客户端以分片方式上传文件，完成后服务端核对 SHA-256 摘要。中断的分片可以重试，但尚未完成的上传会在 18 小时后清理。对象写入成功不等于下游索引已经更新，搜索页面可能短时间查不到新文件。",
+        "anchors": [
+          [
+            "分片"
+          ],
+          [
+            "SHA-256"
+          ],
+          [
+            "18",
+            "18小时"
+          ],
+          [
+            "清理"
+          ],
+          [
+            "索引",
+            "搜索"
+          ]
+        ],
+        "forbidden": [
+          "永不清理",
+          "立即可搜索",
+          "无需校验"
+        ]
+      },
+      {
+        "id": "secret-2026-09-25",
+        "title": "密钥轮换",
+        "article": "服务端每 20 天轮换一次签名密钥。轮换期间，新旧两把密钥并行验证已有会话，旧密钥在宽限期结束后停用。密钥只保存在服务端，客户端仅持有签名后的令牌；轮换不能撤销已经泄露但仍在宽限期内的令牌。",
+        "anchors": [
+          [
+            "20",
+            "20天"
+          ],
+          [
+            "新旧",
+            "两把"
+          ],
+          [
+            "宽限期"
+          ],
+          [
+            "服务端"
+          ],
+          [
+            "泄露"
+          ]
+        ],
+        "forbidden": [
+          "客户端保存密钥",
+          "立即撤销所有令牌",
+          "无需宽限期"
+        ]
+      }
+    ],
+    "baseline": {
+      "score": 91.3,
+      "coverage": 0.933,
+      "format": 1,
+      "characters": 172,
+      "forbidden": [],
+      "missing": [
+        "短时间"
+      ],
+      "outputs": [
+        {
+          "sampleId": "postgres-replica",
+          "title": "异步只读副本",
+          "summary": "结论：订单服务通过主库写入和异步复制的只读副本提升读吞吐量，但不保证副本的即时一致性。\n\n要点：1. 订单服务将写入提交到 PostgreSQL 主库。2. 只读副本通过异步复制接收变更。3. 副本故障时读请求回退主库。4. 该设计提高读吞吐量。5. 不保证副本上的即时一致性。\n\n风险：原文未说明。\n\n术语：异步复制：副本通过异步方式接收主库的变更。",
+          "score": 84,
+          "coverage": 0.8,
+          "format": 1,
+          "efficiency": 0.776,
+          "characters": 163,
+          "forbidden": [],
+          "missing": [
+            "短时间"
+          ]
+        },
+        {
+          "sampleId": "http-cache",
+          "title": "HTTP 条件请求",
+          "summary": "**结论**：ETag 机制可减少重复传输，但首次请求仍需完整资源。\n\n**要点**：  \n1. 服务器在响应中返回 ETag。  \n2. 客户端下次请求携带 If-None-Match。  \n3. 若资源未变化，服务器返回 304 且不发送响应正文。  \n\n**风险**：原文未说明  \n\n**术语**：ETag：由服务端维护的资源标识符，用于判断内容是否变化。",
+          "score": 96,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.797,
+          "characters": 155,
+          "forbidden": [],
+          "missing": []
+        },
+        {
+          "sampleId": "passkeys",
+          "title": "通行密钥登录",
+          "summary": "**结论**：WebAuthn 登录通过私钥签名实现安全认证，但设备丢失仍需依赖恢复方式。\n\n**要点**：  \n1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 设备丢失需事先配置的恢复方式。\n\n**风险**：原文未说明。\n\n**术语**：WebAuthn 是一种基于公开密钥加密的认证协议，用于增强在线身份验证的安全性。",
+          "score": 94,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.681,
+          "characters": 198,
+          "forbidden": [],
+          "missing": []
+        }
+      ]
+    },
+    "holdoutBaseline": {
+      "score": 95.5,
+      "coverage": 1,
+      "format": 1,
+      "characters": 165,
+      "forbidden": [],
+      "missing": [],
+      "outputs": [
+        {
+          "sampleId": "object-2026-09-25",
+          "title": "对象存储清理",
+          "summary": "**结论**：文件上传后需等待索引更新，搜索可能延迟。\n\n**要点**：  \n1. 客户端以分片方式上传文件。  \n2. 服务端核对 SHA-256 摘要。  \n3. 中断分片可重试，未完成上传 18 小时后清理。  \n4. 对象写入成功后，下游索引可能未立即更新。  \n\n**风险**：搜索页面可能短时间查不到新文件。  \n\n**术语**：SHA-256 是一种加密哈希算法，用于验证数据完整性。",
+          "score": 95,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.762,
+          "characters": 168,
+          "forbidden": [],
+          "missing": []
+        },
+        {
+          "sampleId": "secret-2026-09-25",
+          "title": "密钥轮换",
+          "summary": "**结论**：服务端定期轮换签名密钥，确保安全性。\n\n**要点**：  \n1. 服务端每 20 天轮换一次签名密钥。  \n2. 轮换期间，新旧两把密钥并行验证已有会话。  \n3. 旧密钥在宽限期结束后停用。  \n4. 密钥只保存在服务端，客户端仅持有签名后的令牌。  \n5. 轮换不能撤销已经泄露但仍在宽限期内的令牌。\n\n**风险**：原文未说明。\n\n**术语**：原文未说明。",
+          "score": 96,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.781,
+          "characters": 161,
+          "forbidden": [],
+          "missing": []
+        }
+      ]
+    },
+    "candidates": [
+      {
+        "id": "C1",
+        "strategyVersion": "s0",
+        "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。",
+        "hypothesis": "增强对‘短时间’等模糊表述的处理，确保所有关键事实可被原文明确支持",
+        "metrics": {
+          "score": 95.3,
+          "coverage": 1,
+          "format": 1,
+          "characters": 170,
+          "forbidden": [],
+          "missing": [],
+          "outputs": [
+            {
+              "sampleId": "postgres-replica",
+              "title": "异步只读副本",
+              "summary": "结论：订单服务通过主库写入和异步复制的只读副本提升读吞吐量，但不保证副本即时一致性。\n\n要点：  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。  \n4. 该设计提高读吞吐量。  \n5. 不保证副本上的即时一致性。\n\n风险：副本可能在短时间无法反映最新写入，导致查询结果不一致。\n\n术语：异步复制：指数据变更在主库提交后，延迟传输到只读副本的技术。",
+              "score": 94,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.695,
+              "characters": 193,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "http-cache",
+              "title": "HTTP 条件请求",
+              "summary": "结论：ETag 机制可减少重复传输，但首次请求需获取完整资源。\n\n要点：1. 客户端下次请求携带 If-None-Match。  \n2. 服务器返回 304 时不再发送响应正文。  \n3. ETag 由服务端维护，不能仅凭文件名判断内容是否变化。  \n4. 首次请求需获取完整资源。\n\n风险：原文未说明。\n\n术语：ETag：一种由服务器生成的标识符，用于标识资源的特定版本。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.776,
+              "characters": 163,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "passkeys",
+              "title": "通行密钥登录",
+              "summary": "结论：WebAuthn 登录通过私钥签名验证用户身份。\n\n要点：1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 设备丢失需事先配置的恢复方式。\n\n风险：原文未说明。\n\n术语：WebAuthn：一种用于安全身份验证的开放标准。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.803,
+              "characters": 153,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "holdout": {
+          "score": 96.5,
+          "coverage": 1,
+          "format": 1,
+          "characters": 153,
+          "forbidden": [],
+          "missing": [],
+          "outputs": [
+            {
+              "sampleId": "object-2026-09-25",
+              "title": "对象存储清理",
+              "summary": "结论：文件上传完成后需等待索引更新，搜索可能有延迟。\n\n要点：  \n1. 客户端以分片方式上传文件。  \n2. 服务端核对 SHA-256 摘要。  \n3. 中断的分片可以重试。  \n4. 尚未完成的上传会在 18 小时后清理。  \n5. 对象写入成功后，下游索引可能未更新。\n\n风险：搜索页面可能短时间查不到新文件。\n\n术语：SHA-256 是一种加密哈希算法，用于校验文件完整性。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.781,
+              "characters": 161,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "secret-2026-09-25",
+              "title": "密钥轮换",
+              "summary": "结论：服务端定期轮换签名密钥以保障安全。\n\n要点：1. 服务端每 20 天轮换一次签名密钥。  \n2. 轮换期间，新旧两把密钥并行验证已有会话。  \n3. 旧密钥在宽限期结束后停用。  \n4. 密钥只保存在服务端，客户端仅持有签名后的令牌。  \n5. 轮换不能撤销已经泄露但仍在宽限期内的令牌。\n\n风险：原文未说明。\n\n术语：原文未说明。",
+              "score": 97,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.827,
+              "characters": 144,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "eligible": true,
+        "reason": "开发集提升至少 2 分，且新验证文章无退步"
+      },
+      {
+        "id": "C2",
+        "strategyVersion": "trial-54ee9c67",
+        "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件。风险：写出原文提到的限制；没有则写“原文未说明”。术语：解释首次出现的关键技术术语；原文信息不足时写“原文未说明”。禁止补充原文以外的信息。全文不超过 450 字。",
+        "hypothesis": "增强对原文信息的严格依赖，明确禁止推测性内容",
+        "metrics": {
+          "score": 95.3,
+          "coverage": 1,
+          "format": 1,
+          "characters": 171,
+          "forbidden": [],
+          "missing": [],
+          "outputs": [
+            {
+              "sampleId": "postgres-replica",
+              "title": "异步只读副本",
+              "summary": "**结论：** 该设计通过主从复制提升读性能，但无法保证副本的即时一致性。\n\n**要点：**  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。  \n\n**风险：** 用户刚下单后立即查询副本，可能短时间看不到订单。  \n\n**术语：** 异步复制：指数据从主库传输到副本的过程不是实时完成，可能存在延迟。",
+              "score": 95,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.751,
+              "characters": 172,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "http-cache",
+              "title": "HTTP 条件请求",
+              "summary": "结论：ETag 机制可减少重复传输，但首次请求仍需完整资源。\n\n要点：1. 客户端下次请求携带 If-None-Match。  \n2. 服务器返回 304 时不再发送响应正文。  \n3. ETag 由服务端维护，不能仅凭文件名判断内容变化。  \n4. 首次请求需获取完整资源。\n\n风险：原文未说明。\n\n术语：ETag：服务器生成的资源标识符，用于验证资源是否发生变化。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.784,
+              "characters": 160,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "passkeys",
+              "title": "通行密钥登录",
+              "summary": "结论：WebAuthn 登录通过私钥签名和公钥验证实现安全认证。\n\n要点：1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 设备丢失需事先配置的恢复方式。\n\n风险：原文未说明。\n\n术语：WebAuthn：一种用于网络身份验证的开放标准，允许用户通过生物识别或硬件密钥进行安全登录。",
+              "score": 95,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.73,
+              "characters": 180,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "holdout": {
+          "score": 96,
+          "coverage": 1,
+          "format": 1,
+          "characters": 156,
+          "forbidden": [],
+          "missing": [],
+          "outputs": [
+            {
+              "sampleId": "object-2026-09-25",
+              "title": "对象存储清理",
+              "summary": "结论：文件上传完成后需等待索引更新才能被搜索到。\n\n要点：1. 客户端以分片方式上传文件。  \n2. 服务端核对 SHA-256 摘要。  \n3. 中断的分片可以重试。  \n4. 尚未完成的上传会在 18 小时后清理。  \n5. 对象写入成功后下游索引可能未更新。\n\n风险：上传完成后搜索可能短时间查不到新文件。\n\n术语：SHA-256 是一种加密哈希算法，用于校验数据完整性。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.781,
+              "characters": 161,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "secret-2026-09-25",
+              "title": "密钥轮换",
+              "summary": "结论：服务端定期轮换签名密钥以保障安全。\n\n要点：  \n1. 服务端每 20 天轮换一次签名密钥。  \n2. 轮换期间，新旧两把密钥并行验证已有会话。  \n3. 旧密钥在宽限期结束后停用。  \n4. 密钥只保存在服务端，客户端仅持有签名后的令牌。  \n5. 轮换不能撤销已经泄露但仍在宽限期内的令牌。\n\n风险：原文未说明。\n\n术语：无首次出现的关键技术术语。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.808,
+              "characters": 151,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "eligible": true,
+        "reason": "开发集提升至少 2 分，且新验证文章无退步"
+      }
+    ],
+    "accepted": true,
+    "selectedId": "C1",
+    "championVersion": "v1",
+    "championScore": 95.3,
+    "strategyTrial": {
+      "date": "2026-09-25",
+      "incumbent": "s0",
+      "challengerId": "54ee9c67-0e2d-4e2a-bc57-f4494ff258f3",
+      "incumbentDevelopmentScore": 95.3,
+      "challengerDevelopmentScore": 95.3,
+      "incumbentHoldoutScore": 96.5,
+      "challengerHoldoutScore": 96,
+      "challengerWon": false
+    },
+    "strategyDecision": "挑战策略试用 1/3；已赢 0 次，需累计 2 次才晋级",
+    "reason": "C1 在开发集和新文章上均通过晋级门槛"
+  },
+  "history": [
+    {
+      "date": "2026-09-24",
+      "generation": 0,
+      "score": 94.7,
+      "accepted": false,
+      "focus": "保持冠军"
+    },
+    {
+      "date": "2026-09-25",
+      "generation": 1,
+      "score": 95.3,
+      "holdoutScore": 96.5,
+      "accepted": true,
+      "focus": "增强对‘短时间’等模糊表述的处理，确保所有关键事实可被原文明确支持",
+      "strategy": "s0"
+    }
+  ],
+  "updatedAt": "2026-09-25T01:00:58.138Z",
+  "benchmark": [
+    {
+      "id": "postgres-replica",
+      "title": "异步只读副本",
+      "article": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。副本故障时读请求会回退主库。这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+      "anchors": [
+        "PostgreSQL",
+        "异步复制",
+        "短时间",
+        "回退主库",
+        "不保证"
+      ]
+    },
+    {
+      "id": "http-cache",
+      "title": "HTTP 条件请求",
+      "article": "服务器在响应中返回 ETag。客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。ETag 由服务端维护，不能仅凭文件名判断内容是否变化。该机制减少重复传输，但首次请求仍需获取完整资源。",
+      "anchors": [
+        "ETag",
+        "If-None-Match",
+        "304",
+        "响应正文",
+        "首次请求"
+      ]
+    },
+    {
+      "id": "passkeys",
+      "title": "通行密钥登录",
+      "article": "WebAuthn 登录时，服务器生成一次性 challenge。认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。私钥留在用户设备，不会发送给网站。若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+      "anchors": [
+        "WebAuthn",
+        "challenge",
+        "私钥",
+        "公钥",
+        "恢复"
+      ]
+    }
+  ],
+  "scoring": "开发集：事实覆盖 60% + 四段格式 20% + 长度精简度 20%，禁用断言扣分；候选需提升至少 2 分。新文章验证：综合分和事实覆盖均不得下降，且禁用断言为零。挑战生成策略需在最多 3 次配对试验中赢 2 次才晋级。",
+  "holdoutPolicy": "每天按日期组合两篇新的参数化技术短文；候选与策略生成器均不接收当日验证文章，测试后完整公开。相同主题模板可能重复，因此仍需未来引入人工审校和独立真实文章。"
+}
