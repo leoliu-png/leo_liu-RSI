@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { benchmark } from "../src/benchmark.js";
 import { holdoutForDate } from "../src/holdout.js";
+import { hasSnapshotEvidence } from "../scripts/snapshot-evidence.mjs";
 import {
   STATE_KEY, challengerBeatsIncumbent, experimentDate, getState, initialState,
   promotionDecision, rescoreMetrics, runEvolution, scoreSummary, updateStrategyTrial
@@ -10,9 +11,10 @@ import {
 const promptA = "候选 A。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；输出前核对所有具体条件，禁止臆造原文以外的信息，全文控制在 450 字以内。";
 const promptB = "候选 B。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；先压缩连接词，再输出完整的四段摘要，禁止编造，全文控制在 450 字以内。";
 
-function fakeEnvironment({ fail = false, holdoutFail = false } = {}) {
+function fakeEnvironment({ fail = false, holdoutFail = false, proposalPrompt } = {}) {
   const values = new Map();
   let calls = 0;
+  let proposalCalls = 0;
   const samples = [...benchmark, ...holdoutForDate("2026-09-24"), ...holdoutForDate("2026-09-25")];
   const env = {
     EVOLUTION: {
@@ -33,6 +35,9 @@ function fakeEnvironment({ fail = false, holdoutFail = false } = {}) {
           instruction: "先从最近开发集失分中识别遗漏的实体、数字和限制，再提出只针对一类遗漏的改写；保留原文忠实性和四段结构，并在生成前检查是否复制了旧候选。"
         }) };
         if (input.temperature === 0.7) {
+          proposalCalls++;
+          const proposed = proposalPrompt?.(proposalCalls, input);
+          if (proposed) return { response: JSON.stringify({ hypothesis: "尝试新的提示词改写", prompt: proposed }) };
           const challenger = input.messages[0].content.includes("先从最近开发集失分");
           return { response: JSON.stringify({ hypothesis: challenger ? "先处理事实" : "先检查结构", prompt: challenger ? promptB : promptA }) };
         }
@@ -48,7 +53,7 @@ function fakeEnvironment({ fail = false, holdoutFail = false } = {}) {
       }
     }
   };
-  return { env, values, calls: () => calls };
+  return { env, values, calls: () => calls, proposalCalls: () => proposalCalls };
 }
 
 test("development scorer recognizes facts and Markdown headings", () => {
@@ -86,6 +91,7 @@ test("paired strategies produce candidates; development and unseen passages gate
   assert.equal(first.state.latestRun.holdoutBaseline.outputs.length, 2);
   assert.equal(first.state.latestRun.candidates[0].holdout.outputs.length, 2);
   assert.equal(first.state.latestRun.strategyTrial.challengerWon, false);
+  assert.equal(hasSnapshotEvidence(first.state), true);
   assert.equal(first.state.challenger.trials.length, 1);
   assert.ok(mock.values.has("rsi:v3:run:2026-09-24"));
   const callsAfterFirst = mock.calls();
@@ -102,6 +108,67 @@ test("holdout regression rolls back a development-set improvement", async () => 
   assert.equal(result.state.latestRun.accepted, false);
   assert.match(result.state.latestRun.candidates[0].reason, /新验证文章/);
   assert.ok(result.state.latestRun.candidates[0].metrics.score > result.state.latestRun.baseline.score);
+});
+
+test("duplicate proposals are retried and never evaluated as distinct candidates", async () => {
+  const champion = initialState().champion.prompt;
+  const mock = fakeEnvironment({ proposalPrompt: call => [champion.replace("结论：", "结论 ："), promptA, promptA, promptB][call - 1] });
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(result.state.latestRun.status, "completed");
+  assert.equal(result.state.latestRun.outcome, "evaluated");
+  assert.deepEqual(result.state.latestRun.candidates.map(item => item.prompt), [promptA, promptB]);
+  assert.deepEqual(result.state.latestRun.candidateGeneration.results.map(item => item.attempts), [2, 2]);
+  assert.equal(result.state.latestRun.candidateGeneration.results[0].rejected.length, 1);
+  assert.equal(result.state.latestRun.candidateGeneration.results[1].rejected.length, 1);
+  assert.equal(mock.proposalCalls(), 4);
+});
+
+test("exhausted duplicate retries preserve the champion and complete an evidenced no-op", async () => {
+  const champion = initialState().champion.prompt;
+  const mock = fakeEnvironment({ proposalPrompt: () => champion });
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  const run = result.state.latestRun;
+  assert.equal(run.status, "completed");
+  assert.equal(run.outcome, "generation_exhausted");
+  assert.equal(run.accepted, false);
+  assert.deepEqual(run.candidates, []);
+  assert.equal(run.strategyTrial, null);
+  assert.equal(run.baseline.outputs.length, 3);
+  assert.equal(run.holdoutBaseline.outputs.length, 2);
+  assert.equal(result.state.champion.version, "v0");
+  assert.equal(result.state.challenger, null);
+  assert.deepEqual(run.candidateGeneration.results.map(item => item.rejected.length), [3, 3]);
+  assert.equal(hasSnapshotEvidence(result.state), true);
+  assert.equal(hasSnapshotEvidence({ ...result.state, latestRun: { ...run, candidateGeneration: null } }), false);
+  assert.equal(mock.proposalCalls(), 6);
+  assert.equal(result.state.feedbackHistory.at(-1).rejectedCandidates[0].rejected, 3);
+  const again = await runEvolution(mock.env, Date.parse("2026-09-24T02:00:00Z"));
+  assert.equal(again.skipped, true);
+  assert.equal(mock.proposalCalls(), 6);
+});
+
+test("a single distinct candidate can be judged without fabricating a paired strategy trial", async () => {
+  const mock = fakeEnvironment({ proposalPrompt: () => promptA });
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  const run = result.state.latestRun;
+  assert.equal(run.status, "completed");
+  assert.equal(run.outcome, "partial_candidates");
+  assert.equal(run.candidates.length, 1);
+  assert.equal(run.candidates[0].id, "C1");
+  assert.equal(run.strategyTrial, null);
+  assert.equal(result.state.strategyHistory.length, 0);
+  assert.equal(run.candidateGeneration.results[1].rejected.length, 3);
+  assert.equal(result.state.challenger, null);
+  assert.equal(hasSnapshotEvidence(result.state), true);
+});
+
+test("previously evaluated prompts are excluded from a later experiment", async () => {
+  const mock = fakeEnvironment({ proposalPrompt: call => call === 1 ? promptA : promptB });
+  mock.values.set(STATE_KEY, JSON.stringify({ ...initialState(), recentCandidatePrompts: [promptA] }));
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(result.state.latestRun.candidateGeneration.results[0].rejected.length, 1);
+  assert.ok(result.state.latestRun.candidates.every(item => item.prompt !== promptA));
+  assert.equal(result.state.latestRun.outcome, "partial_candidates");
 });
 
 test("challenger strategy requires two paired wins and then replaces the incumbent", () => {

@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { hasSnapshotEvidence } from "./snapshot-evidence.mjs";
 
 const endpoint = process.env.RSI_SITE_URL || "https://rsi-evolution-lab.leoliu-dev.workers.dev";
 const response = await fetch(new URL("/api/evolution", endpoint), {
@@ -14,11 +15,7 @@ if (data.latestRun?.status !== "completed" || data.latestRun.date !== today) {
   throw new Error(`No completed experiment for ${today}; snapshot was not created`);
 }
 const target = new URL(`../snapshots/${today}.json`, import.meta.url);
-const hasFullEvidence = data.schemaVersion === 3 && Array.isArray(data.latestRun.candidates) &&
-  Array.isArray(data.latestRun.baseline?.outputs) && Array.isArray(data.latestRun.holdoutBaseline?.outputs) &&
-  Array.isArray(data.latestRun.validationSamples) && data.latestRun.strategyTrial &&
-  data.latestRun.candidates.every(item => Array.isArray(item.holdout?.outputs));
-if (!hasFullEvidence) {
+if (!hasSnapshotEvidence(data)) {
   let archived;
   try {
     archived = JSON.parse(await readFile(target, "utf8"));

@@ -6,6 +6,7 @@ const LEGACY_STATE_KEY = "rsi:v2:state";
 const RUN_PREFIX = "rsi:v3:run:";
 const HEADINGS = ["结论", "要点", "风险", "术语"];
 const SCORER_VERSION = 3;
+const MAX_CANDIDATE_ATTEMPTS = 3;
 const INITIAL_STRATEGY = {
   version: "s0",
   hypothesis: "针对事实遗漏与冗长问题，只做一处可验证的提示词修改",
@@ -28,6 +29,7 @@ export function initialState() {
     challenger: null,
     strategyHistory: [],
     feedbackHistory: [],
+    recentCandidatePrompts: [],
     latestRun: null,
     history: [],
     updatedAt: null
@@ -122,16 +124,36 @@ async function generateStrategy(ai, state) {
   return challenger;
 }
 
-async function generateCandidate(ai, champion, strategy, feedback, id) {
+async function generateCandidate(ai, champion, strategy, feedback, id, excludedPrompts = []) {
+  const exclusions = excludedPrompts.length
+    ? `\n\n以下候选已经存在或因重复被拒绝，新的完整提示词不得与其中任何一条相同（仅改变空格也不算新候选）：\n${excludedPrompts.map((prompt, index) => `${index + 1}. ${prompt}`).join("\n")}`
+    : "";
   const response = await ai.run(modelName, {
     messages: [
       { role: "system", content: `/no_think\n你负责改进技术文章的四段式中文摘要提示词。只返回有效 JSON。必须保留四段标题、忠于原文和禁止编造要求。\n候选生成策略：${strategy.instruction}` },
-      { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}\n\n只提出一个完整候选，并清楚写出单一修改点。格式：{"hypothesis":"单一修改点","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
+      { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n只提出一个与当前冠军及已有候选不同的完整候选，并清楚写出单一修改点。格式：{"hypothesis":"单一修改点","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
     ],
     max_tokens: 1200,
     temperature: 0.7
   });
   return parseCandidate(extractText(response), id, strategy.version || `trial-${strategy.id.slice(0, 8)}`);
+}
+
+async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts) {
+  const excluded = [...occupiedPrompts];
+  const occupied = new Set(excluded.map(clean));
+  const rejected = [];
+  for (let attempt = 1; attempt <= MAX_CANDIDATE_ATTEMPTS; attempt++) {
+    const candidate = await generateCandidate(ai, champion, strategy, feedback, id, excluded);
+    const normalized = clean(candidate.prompt);
+    if (!occupied.has(normalized)) {
+      return { candidate, attempts: attempt, rejected };
+    }
+    rejected.push({ attempt, reason: "与冠军、历史候选或当日已接受候选重复", prompt: candidate.prompt });
+    excluded.push(candidate.prompt);
+    occupied.add(normalized);
+  }
+  return { candidate: null, attempts: MAX_CANDIDATE_ATTEMPTS, rejected };
 }
 
 async function runPrompt(ai, prompt, samples) {
@@ -241,13 +263,18 @@ export async function runEvolution(env, timestamp = Date.now()) {
     const challenger = state.challenger || await generateStrategy(env.AI, state);
     const workingState = { ...state, challenger };
     const feedback = historicalFeedback(state);
-    const candidates = [
-      await generateCandidate(env.AI, state.champion.prompt, state.strategy, feedback, "C1"),
-      await generateCandidate(env.AI, state.champion.prompt, challenger, feedback, "C2")
-    ];
-    if (candidates.some(item => item.prompt === state.champion.prompt) || candidates[0].prompt === candidates[1].prompt) {
-      throw new Error("Candidate prompt did not change");
-    }
+    const occupiedPrompts = [state.champion.prompt, ...(state.recentCandidatePrompts || []).slice(-10)];
+    const first = await generateUniqueCandidate(env.AI, state.champion.prompt, state.strategy, feedback, "C1", occupiedPrompts);
+    const second = await generateUniqueCandidate(env.AI, state.champion.prompt, challenger, feedback, "C2",
+      first.candidate ? [...occupiedPrompts, first.candidate.prompt] : occupiedPrompts);
+    const candidates = [first.candidate, second.candidate].filter(Boolean);
+    const candidateGeneration = {
+      maxAttemptsPerCandidate: MAX_CANDIDATE_ATTEMPTS,
+      results: [
+        { id: "C1", strategyVersion: state.strategy.version, attempts: first.attempts, accepted: Boolean(first.candidate), rejected: first.rejected },
+        { id: "C2", strategyVersion: challenger.version || `trial-${challenger.id.slice(0, 8)}`, attempts: second.attempts, accepted: Boolean(second.candidate), rejected: second.rejected }
+      ]
+    };
     const validationSamples = holdoutForDate(date);
     const [baseline, holdoutBaseline] = await Promise.all([
       runPrompt(env.AI, state.champion.prompt, benchmark),
@@ -268,34 +295,44 @@ export async function runEvolution(env, timestamp = Date.now()) {
     const champion = winner
       ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score }
       : { ...state.champion, score: baseline.score };
-    const strategyResult = updateStrategyTrial(workingState, date, evaluated[0], evaluated[1]);
+    const strategyResult = evaluated.length === 2
+      ? updateStrategyTrial(workingState, date, evaluated[0], evaluated[1])
+      : {
+          trial: null, strategy: state.strategy, challenger: null, strategyGeneration: state.strategyGeneration,
+          decision: "候选去重重试后不足两条不同候选；不计策略胜负，回退未完成配对的挑战策略"
+        };
+    const outcome = evaluated.length === 2 ? "evaluated" : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
     const run = {
       id: crypto.randomUUID(), schemaVersion: 3, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
       model: modelName, scorerVersion: SCORER_VERSION,
       benchmarkIds: benchmark.map(item => item.id), validationSamples,
-      baseline, holdoutBaseline, candidates: evaluated,
+      baseline, holdoutBaseline, candidates: evaluated, candidateGeneration, outcome,
       accepted: Boolean(winner), selectedId: winner?.id ?? null,
       championVersion: champion.version, championScore: champion.score,
       strategyTrial: strategyResult.trial, strategyDecision: strategyResult.decision,
-      reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛` : "所有候选未同时通过开发集与新文章验证；冠军保持不变"
+      reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛${outcome === "partial_candidates" ? "；策略配对未完成" : ""}`
+        : outcome === "generation_exhausted" ? "两条候选均在去重重试后无有效新 Prompt；仅完成冠军基线测评，冠军保持不变"
+        : outcome === "partial_candidates" ? "仅一条不同候选通过去重；未完成策略配对，冠军保持不变"
+        : "所有候选未同时通过开发集与新文章验证；冠军保持不变"
     };
     const feedbackRecord = {
       date, candidates: evaluated.map(item => ({
         id: item.id, score: item.metrics.score,
         missing: item.metrics.missing, forbidden: item.metrics.forbidden
-      }))
+      })), rejectedCandidates: candidateGeneration.results.map(item => ({ id: item.id, attempts: item.attempts, rejected: item.rejected.length }))
     };
     const next = {
       ...state, schemaVersion: 3, generation, champion,
       strategyGeneration: strategyResult.strategyGeneration, strategy: strategyResult.strategy,
       challenger: strategyResult.challenger,
-      strategyHistory: [...state.strategyHistory, strategyResult.trial].slice(-30),
+      strategyHistory: strategyResult.trial ? [...state.strategyHistory, strategyResult.trial].slice(-30) : state.strategyHistory,
       feedbackHistory: [...state.feedbackHistory, feedbackRecord].slice(-10),
+      recentCandidatePrompts: [...(state.recentCandidatePrompts || []), ...evaluated.map(item => item.prompt)].slice(-10),
       latestRun: run,
       history: [...state.history, {
         date, generation, score: champion.score,
         holdoutScore: winner?.holdout.score ?? holdoutBaseline.score,
-        accepted: Boolean(winner), focus: winner?.hypothesis ?? "保持冠军",
+        accepted: Boolean(winner), focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "候选重复，未晋级"),
         strategy: strategyResult.strategy.version
       }].slice(-30),
       updatedAt: run.completedAt

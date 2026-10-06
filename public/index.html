@@ -231,10 +231,11 @@
     }
     function render(state) {
       const run=state.latestRun, champion=state.champion;
-      $("#online-status").textContent = run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
+      const limited=run?.status === "completed" && ["partial_candidates","generation_exhausted"].includes(run.outcome);
+      $("#online-status").textContent = limited ? "LIMITED / 候选去重受限" : run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
       $("#version").textContent = champion.version;
       $("#score").textContent = number(champion.score);
-      $("#decision").textContent = run?.status === "completed" ? (run.accepted ? "已晋级" : "保留冠军") : run?.status === "failed" ? "运行失败" : "待运行";
+      $("#decision").textContent = run?.status === "completed" ? (run.accepted ? "已晋级" : limited ? "去重回退" : "保留冠军") : run?.status === "failed" ? "运行失败" : "待运行";
       $("#date").textContent = run?.date || "每天 09:00 CST";
       $("#champion-title").textContent = `冠军提示词 · ${champion.version}`;
       $("#champion-prompt").textContent = champion.prompt;
@@ -267,7 +268,9 @@
         const details=make("details"); details.append(make("summary","查看完整候选 Prompt"),make("pre",item.prompt)); card.append(details); candidates.append(card);
         if(item.metrics.outputs?.length){const evidence=make("details");evidence.append(make("summary","查看开发集逐篇摘要"));item.metrics.outputs.forEach(output=>{evidence.append(make("h4",`${output.title} · ${output.score} 分`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));});card.append(evidence);}
       });
-      else candidates.append(make("p","首次实验完成后展示真实候选 Prompt 和分数。","note"));
+      else candidates.append(make("p",run?.outcome === "generation_exhausted" ? "两条候选均与冠军、历史候选或彼此重复，重试后仍无不同 Prompt；今天没有候选晋级。" : "首次实验完成后展示真实候选 Prompt 和分数。","note"));
+      const rejected=run?.candidateGeneration?.results?.flatMap(item=>item.rejected.map(entry=>({...entry,id:item.id}))) || [];
+      if(rejected.length){const evidence=make("details");evidence.append(make("summary",`查看 ${rejected.length} 次重复候选拦截记录`));rejected.forEach(item=>evidence.append(make("p",`${item.id} · 第 ${item.attempt} 次：${item.reason}`,"note"),make("pre",item.prompt)));candidates.append(evidence);}
       drawChart(state.history || []);
       const tbody=$("#history"); tbody.replaceChildren();
       if (state.history?.length) [...state.history].reverse().forEach(item=>{
@@ -304,6 +307,7 @@
       } else outputs.append(make("p","首次实验完成后展示冠军版本生成的摘要。","note"));
       const notice=$("#notice");
       if(run?.status==="failed") { notice.classList.add("error"); notice.textContent=`最近实验失败：${run.error}。当前冠军没有被替换；下一次定时运行将重试。`; }
+      else if(limited) notice.textContent="模型给出了重复候选，系统已拦截并有限重试；未凑齐两条不同候选时不进行策略比较。冠军仅在通过新文章验证时晋级，重复本身不会造成整日实验失败。";
       else notice.textContent=run?.schemaVersion===3
         ? "Cloudflare 每天自动运行双层实验；策略比较、提示词晋级和新文章验证证据均保留在记录中。GitHub 保存每日快照。"
         : "旧版实验已保留；新版双层策略和新文章验证将在下一轮实验后展示。";
