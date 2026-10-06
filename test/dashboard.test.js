@@ -6,6 +6,7 @@ import { initialState, publicState } from "../src/evolution.js";
 import { developmentCorpus, validationForDate, auditCorpus } from "../src/corpus.js";
 import { scoreJudgment } from "../src/evaluator.js";
 import { judgmentFor } from "../test-support/judgment.js";
+import { MODEL_PROFILE, MODEL_NAME } from "../src/model.js";
 
 function output(sample) {
   return { sampleId: sample.id, title: sample.title, summary: sample.reference, sources: sample.sources,
@@ -42,7 +43,9 @@ test("dashboard renders V4 dimensions, calibration and evidence; excludes V3 fro
   const date = "2026-10-06", dev = developmentCorpus.slice(0, 3), validation = validationForDate(date);
   const baseline = metrics(dev), holdoutBaseline = metrics(validation);
   const state = publicState({ ...initialState(), champion: { ...initialState().champion, score: 90 },
-    history: [{ date: "2026-10-05", scorerVersion: 3, score: 97, generation: 1 }, { date, scorerVersion: 4, score: 90, generation: 1 }],
+    history: [{ date: "2026-10-05", scorerVersion: 3, score: 97, generation: 1 },
+      { date, scorerVersion: 4, score: 99, generation: 1, modelProfile: "legacy-workers-ai" },
+      { date, scorerVersion: 4, score: 90, generation: 1, modelProfile: MODEL_PROFILE }],
     latestRun: { schemaVersion: 4, status: "completed", date, reason: "保留冠军", accepted: false, baseline, holdoutBaseline,
       developmentSamples: dev, validationSamples: validation, candidates: [],
       audit: { championVersion: "v0", samples: auditCorpus, metrics: metrics(auditCorpus) },
@@ -53,4 +56,5 @@ test("dashboard renders V4 dimensions, calibration and evidence; excludes V3 fro
   assert.equal(elements.get("#calibration-table").children.length, 1);
   assert.equal(elements.get("#audit-outputs").children.length, 3);
   assert.match(elements.get("#chart-note").textContent, /1 次真实实验/);
+  assert.ok(elements.get("#evaluator-info").textContent.includes(MODEL_NAME));
 });

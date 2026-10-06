@@ -190,7 +190,7 @@
       <div class="strategy-trial"><h3>挑战策略与晋级证据</h3><p id="strategy-challenger">等待首轮新版实验。</p><p id="strategy-decision">策略不会因单日运气直接晋级。</p></div>
     </div><div class="table-wrap"><table><thead><tr><th>日期</th><th>当前策略</th><th>开发集 当前/挑战</th><th>隔离文章 当前/挑战</th><th>挑战胜出</th></tr></thead><tbody id="strategy-history"><tr><td colspan="5">新版实验完成后生成记录。</td></tr></tbody></table></div></section>
 
-    <section class="panel section"><div class="section-head"><h2>开发集评分趋势</h2><span>只绘制 V4 分数 / 每日文章轮换，非单调进步曲线</span></div><div class="metrics"><div class="chart-wrap"><svg id="chart" viewBox="0 0 700 255" role="img" aria-label="真实实验开发集综合分趋势图"></svg><p class="note" id="chart-note">等待首轮实测数据。</p></div><div class="metric-explain"><dl><dt>事实准确性</dt><dd>40%</dd><dt>信息完整性</dt><dd>25%</dd><dt>条件与适用范围</dt><dd>20%</dd><dt>表达清晰 / 不冗余</dt><dd>10%</dd><dt>四段格式</dt><dd>5%</dd></dl><p class="note">模型逐句核查证据，脚本计算分数。矛盾或无依据断言否决晋级，单篇封顶 49 分；80–450 字仅作约束。评委仍可能犯错，不能替代人工审校。</p><p class="note" id="reason">最近结果：等待实验。</p></div></div></section>
+    <section class="panel section"><div class="section-head"><h2>开发集评分趋势</h2><span>仅当前模型周期 / 每日文章轮换，非单调进步曲线</span></div><div class="metrics"><div class="chart-wrap"><svg id="chart" viewBox="0 0 700 255" role="img" aria-label="真实实验开发集综合分趋势图"></svg><p class="note" id="chart-note">等待首轮实测数据。</p></div><div class="metric-explain"><dl><dt>事实准确性</dt><dd>40%</dd><dt>信息完整性</dt><dd>25%</dd><dt>条件与适用范围</dt><dd>20%</dd><dt>表达清晰 / 不冗余</dt><dd>10%</dd><dt>四段格式</dt><dd>5%</dd></dl><p class="note">模型逐句核查证据，脚本计算分数。矛盾或无依据断言否决晋级，单篇封顶 49 分；80–450 字仅作约束。生成与评委使用同一个模型，可能有相关性偏差；校准不能替代独立人工审校。</p><p class="note" id="reason">最近结果：等待实验。</p></div></div></section>
 
     <section class="panel section"><div class="section-head"><h2>每日实验账本</h2><span>真实执行记录</span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>冠军版本</th><th>开发集</th><th>隔离文章</th><th>策略版本</th><th>结果</th><th>改进焦点</th></tr></thead><tbody id="history"><tr><td colspan="7">首次实验完成后生成记录。</td></tr></tbody></table></div></section>
 
@@ -203,15 +203,15 @@
     <section class="panel section"><div class="section-head"><h2>最近一次摘要输出</h2><span>逐篇保留原文生成结果</span></div><div id="outputs" class="result"><p class="note">首次实验完成后展示冠军版本生成的摘要。</p></div></section>
     <div id="notice" class="notice">Cloudflare 每天自动运行一次；旧实验继续保留，新版双层验证将在下一轮完成后展示。GitHub 保存代码与每日快照。</div>
   </main>
-  <footer class="shell"><span>PROMPT RSI LAB · REAL EXPERIMENTS</span><span>Cloudflare Workers AI + KV + Cron / GitHub Actions</span></footer>
+  <footer class="shell"><span>PROMPT RSI LAB · REAL EXPERIMENTS</span><span>OpenRouter Nemotron / Cloudflare Workers + KV + Cron / GitHub Actions</span></footer>
   <script>
     const $ = selector => document.querySelector(selector);
     const make = (tag, text, className) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; };
     const number = value => typeof value === "number" ? value.toFixed(1) : "—";
-    function drawChart(history) {
-      history = history.filter(item => item.scorerVersion === 4);
+    function drawChart(history, modelProfile) {
+      history = history.filter(item => item.scorerVersion === 4 && item.modelProfile === modelProfile);
       const svg = $("#chart"); svg.replaceChildren();
-      if (!history.length) return;
+      if (!history.length) { $("#chart-note").textContent="当前模型尚无实测曲线；旧模型分数仅保留在历史表。"; return; }
       const values = history.map(item => Number(item.score));
       const min = Math.max(0, Math.floor(Math.min(...values) / 10) * 10 - 10);
       const x = i => 42 + i * 630 / Math.max(1, history.length - 1);
@@ -248,9 +248,9 @@
     function renderEvaluation(state) {
       const run=state.latestRun, calibration=run?.calibration;
       $("#evaluator-status").textContent=calibration ? `${calibration.passed?"通过":"未通过"} · ${calibration.results.filter(item=>item.passed).length}/${calibration.results.length}` : "尚无真实校准";
-      $("#evaluator-info").textContent=`生成模型：Qwen3 30B A3B FP8。评委：${state.evaluator?.model||"待配置"} / ${state.evaluator?.version||"V4"}。数据池 9 开发 + 6 验证 + 3 审计；尚待独立人工审校。当天 AI 调用：${run?.usage?.calls??"—"} / 上限 64。`;
+      $("#evaluator-info").textContent=`生成模型：${state.model||run?.model||"待配置"}。评委：${state.evaluator?.model||"待配置"} / ${state.evaluator?.version||"V4"}。生成和评委同模型、不同固定职责提示词；可能有相关性偏差。数据池 9 开发 + 6 验证 + 3 审计；尚待独立人工审校。当天 AI 调用：${run?.usage?.calls??"—"} / 上限 64；HTTP 尝试：${run?.usage?.transport?.attempts??"—"}。`;
       $("#scoring-policy").textContent=state.scoring||"";
-      $("#legacy-score").textContent=state.legacyBaseline ? `旧评分存档：${state.legacyBaseline.championVersion} 为 ${state.legacyBaseline.score} 分（V3，不能与 V4 比较）。新冠军分数来自重新实测。` : "旧评分与 V4 分开保留。";
+      $("#legacy-score").textContent=state.legacyBaseline ? `旧评分存档：${state.legacyBaseline.championVersion} 为 ${state.legacyBaseline.score} 分（评分/模型周期不同，不能直接比较）。新冠军分数来自重新实测。` : "旧评分与当前模型周期分开保留。";
       const tbody=$("#calibration-table"), evidence=$("#calibration-evidence");tbody.replaceChildren();evidence.replaceChildren();
       (calibration?.results||[]).forEach(item=>{
         const row=make("tr");[item.id,item.expected==="pass"?"正确摘要应通过":"错误摘要应拒绝",number(item.metrics.score),item.metrics.hardFailure?"是":"否",item.passed?"通过":"失败"].forEach(value=>row.append(make("td",value)));tbody.append(row);
@@ -313,11 +313,11 @@
       else candidates.append(make("p",run?.outcome === "generation_exhausted" ? "两条候选均与冠军、历史候选或彼此重复，重试后仍无不同 Prompt；今天没有候选晋级。" : "首次实验完成后展示真实候选 Prompt 和分数。","note"));
       const rejected=run?.candidateGeneration?.results?.flatMap(item=>item.rejected.map(entry=>({...entry,id:item.id}))) || [];
       if(rejected.length){const evidence=make("details");evidence.append(make("summary",`查看 ${rejected.length} 次重复或微小改动拦截记录`));rejected.forEach(item=>evidence.append(make("p",`${item.id} · 第 ${item.attempt} 次：${item.reason}`,"note"),make("pre",item.prompt)));candidates.append(evidence);}
-      drawChart(state.history || []);
+      drawChart(state.history || [], state.modelProfile);
       const tbody=$("#history"); tbody.replaceChildren();
       if (state.history?.length) [...state.history].reverse().forEach(item=>{
         const row=make("tr");
-        [item.date,`v${item.generation} / 评分V${item.scorerVersion || 3}`,number(item.score),number(item.holdoutScore),item.strategy || "旧版",item.accepted?"候选晋级":"保留冠军",item.focus].forEach(value=>row.append(make("td",value)));
+        [item.date,`v${item.generation} / 评分V${item.scorerVersion || 3} / ${item.modelProfile === state.modelProfile ? "当前模型" : "旧模型"}`,number(item.score),number(item.holdoutScore),item.strategy || "旧版",item.accepted?"候选晋级":"保留冠军",item.focus].forEach(value=>row.append(make("td",value)));
         tbody.append(row);
       }); else { const row=make("tr"), cell=make("td","首次实验完成后生成记录。"); cell.colSpan=7; row.append(cell); tbody.append(row); }
       const samples=$("#samples"); samples.replaceChildren();
@@ -353,7 +353,7 @@
       else if(assisted) notice.textContent="模型反复提出重复或改动过小的候选时，系统用预定义的实质性核验规则补位并完成评测；补位结果不会被冒充为模型策略胜利。冠军仍须通过开发集和隔离文章验证才能晋级。";
       else notice.textContent=run?.schemaVersion===4
         ? "Cloudflare 每天自动运行双层实验；策略比较、提示词晋级和隔离文章验证证据均保留在记录中。GitHub 保存每日快照。"
-        : "V3 历史分数已保留；V4 将先重新评测冠军，不把旧评分直接当作新基线。";
+        : "旧模型实验已保留；新模型将重新校准评委、重新评测冠军，不把旧评分直接当作新基线。";
     }
     fetch("/api/evolution",{cache:"no-store"}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}).then(render).catch(error=>{
       $("#online-status").textContent="OFFLINE / 数据读取失败";

@@ -1,4 +1,5 @@
 import { experimentDate, getState, publicState, rescoreLatest, runEvolution } from "./evolution.js";
+import { MODEL_NAME, MODEL_PROFILE } from "./model.js";
 
 async function tokenMatches(provided, expected) {
   if (!provided || !expected) return false;
@@ -24,7 +25,7 @@ export default {
     try {
       if (path === "/api/evolution" && request.method === "GET") return json(publicState(await getState(env)));
       if (path === "/api/health" && request.method === "GET") {
-        return json({ ok: true, version: 4, now: new Date().toISOString() });
+        return json({ ok: true, version: 4, provider: "OpenRouter", model: MODEL_NAME, modelProfile: MODEL_PROFILE, now: new Date().toISOString() });
       }
       if (path === "/api/admin/run" && request.method === "POST") {
         const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");

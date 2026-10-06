@@ -14,7 +14,8 @@ const today = new Intl.DateTimeFormat("sv-SE", {
 if (data.latestRun?.status !== "completed" || data.latestRun.date !== today) {
   throw new Error(`No completed experiment for ${today}; snapshot was not created`);
 }
-const target = new URL(`../snapshots/${today}${data.schemaVersion === 4 ? "-v4" : ""}.json`, import.meta.url);
+if (data.modelProfile && !/^[a-z0-9-]+$/.test(data.modelProfile)) throw new Error("Invalid snapshot model profile");
+const target = new URL(`../snapshots/${today}${data.schemaVersion === 4 ? "-v4" : ""}${data.modelProfile ? `-${data.modelProfile}` : ""}.json`, import.meta.url);
 if (!hasSnapshotEvidence(data)) {
   let archived;
   try {

@@ -6,9 +6,10 @@ import { developmentCorpus, validationCorpus, auditCorpus, calibrationCases, val
 import { judgmentFor } from "../test-support/judgment.js";
 import { hasSnapshotEvidence } from "../scripts/snapshot-evidence.mjs";
 import {
-  STATE_KEY, challengerBeatsIncumbent, experimentDate, getState, initialState,
-  promotionDecision, rescoreMetrics, runEvolution, scoreSummary, updateStrategyTrial
+  STATE_KEY, RUN_PREFIX, challengerBeatsIncumbent, experimentDate, getState, initialState,
+  promotionDecision, rescoreMetrics, runEvolution as runRealEvolution, scoreSummary, updateStrategyTrial
 } from "../src/evolution.js";
+const runEvolution = (env, timestamp) => runRealEvolution(env, timestamp, env.AI);
 
 const promptA = "候选 A。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；输出前逐项核对每个数字的计量对象、适用范围、前提条件和原文证据，找不到直接依据就删除该断言，禁止臆造原文以外的信息，全文控制在 450 字以内。";
 const promptB = "候选 B。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；风险段区分已观察到的问题和未证实的可能性，术语段只解释文中实际定义的概念，并删除四段间重复事实，禁止编造，全文控制在 450 字以内。";
@@ -106,7 +107,7 @@ test("paired strategies produce candidates; development and unseen passages gate
   assert.equal(first.state.latestRun.candidates[0].focus, first.state.latestRun.candidates[1].focus);
   assert.equal(hasSnapshotEvidence(first.state), true);
   assert.equal(first.state.challenger.trials.length, 1);
-  assert.ok(mock.values.has("rsi:v4:run:2026-09-24"));
+  assert.ok(mock.values.has(`${RUN_PREFIX}2026-09-24`));
   const callsAfterFirst = mock.calls();
   const second = await runEvolution(mock.env, Date.parse("2026-09-24T02:00:00Z"));
   assert.equal(second.skipped, true);
@@ -287,4 +288,27 @@ test("legacy v2 champion and history migrate without deleting old KV data", asyn
   assert.equal(state.champion.version, "v2");
   assert.equal(state.history.length, 1);
   assert.equal(mock.values.has("rsi:v2:state"), true);
+});
+
+test("model switch keeps old V4 evidence but resets scores, trials, audit and same-day deduplication", async () => {
+  const mock = fakeEnvironment();
+  const date = "2026-09-24";
+  const legacy = { ...initialState(), modelProfile: undefined, generation: 1,
+    champion: { version: "v1", prompt: "legacy champion", score: 99 },
+    latestRun: { status: "completed", date, id: "old-run", model: "old-generator" },
+    challenger: { trials: [{ challengerWon: true }] }, lastAudit: { championVersion: "v1", scorerVersion: 4 },
+    feedbackHistory: [{ from: "old-judge" }], history: [{ date, scorerVersion: 4, score: 99, generation: 1 }] };
+  mock.values.set("rsi:v4:state", JSON.stringify(legacy));
+  const state = await getState(mock.env);
+  assert.equal(state.champion.version, "v1");
+  assert.equal(state.champion.score, null);
+  assert.equal(state.latestRun, null);
+  assert.equal(state.challenger, null);
+  assert.equal(state.lastAudit, null);
+  assert.deepEqual(state.feedbackHistory, []);
+  assert.equal(state.history[0].modelProfile, "legacy-workers-ai");
+  assert.equal(state.legacyBaseline.score, 99);
+  await runEvolution(mock.env, Date.parse(`${date}T01:00:00Z`));
+  assert.equal(mock.values.has(`${RUN_PREFIX}${date}`), true);
+  assert.deepEqual(JSON.parse(mock.values.get("rsi:v4:state")), JSON.parse(JSON.stringify(legacy)));
 });

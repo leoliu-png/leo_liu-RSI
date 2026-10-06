@@ -15,8 +15,11 @@
       "id": "4e340aede6d94c8092da5bbe834337d8"
     }
   ],
-  "ai": { "binding": "AI" },
-  "vars": { "JUDGE_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
+  "vars": {
+    "MODEL_NAME": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "JUDGE_MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1"
+  },
   "triggers": {
     "crons": ["0 1 * * *"]
   },

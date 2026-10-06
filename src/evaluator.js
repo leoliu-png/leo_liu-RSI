@@ -1,8 +1,9 @@
 import { calibrationCases, DATASET_VERSION } from "./corpus.js";
+import { MODEL_NAME } from "./model.js";
 
 export const SCORER_VERSION = 4;
-export const EVALUATOR_VERSION = "semantic-v4.0";
-export const DEFAULT_JUDGE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const EVALUATOR_VERSION = "semantic-v4.1-nemotron";
+export const DEFAULT_JUDGE_MODEL = MODEL_NAME;
 export const RUBRIC = { accuracy: 40, completeness: 25, constraints: 20, clarity: 10, format: 5 };
 const HEADINGS = ["结论", "要点", "风险", "术语"];
 const JUDGE_PROMPT = `rsi-evaluator-v4
@@ -25,7 +26,7 @@ const JUDGE_SCHEMA = itemSchema({
 }, ["units", "facts", "constraints", "clarity"]);
 
 export function createEvaluationContext(ai, model = DEFAULT_JUDGE_MODEL, maxCalls = 64) {
-  const usage = { calls: 0, byModel: {}, judgeCacheHits: 0, inputTokens: 0, outputTokens: 0 };
+  const usage = { calls: 0, byModel: {}, judgeCacheHits: 0, inputTokens: 0, outputTokens: 0, transport: ai.stats || null };
   return {
     model, cache: new Map(), usage,
     ai: { async run(name, input) {

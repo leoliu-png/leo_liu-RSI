@@ -1,10 +1,12 @@
 import { benchmark, initialPrompt, modelName } from "./benchmark.js";
 import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, validationCorpus, validationForDate } from "./corpus.js";
 import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
+import { MODEL_PROFILE, OPENROUTER_BASE_URL } from "./model.js";
+import { createModelClient, redactError } from "./openrouter.js";
 
-export const STATE_KEY = "rsi:v4:state";
+export const STATE_KEY = `rsi:v4:${MODEL_PROFILE}:state`;
 const LEGACY_STATE_KEY = "rsi:v3:state";
-const RUN_PREFIX = "rsi:v4:run:";
+export const RUN_PREFIX = `rsi:v4:${MODEL_PROFILE}:run:`;
 const HEADINGS = ["结论", "要点", "风险", "术语"];
 const MAX_CANDIDATE_ATTEMPTS = 3;
 const FALLBACK_RULES = {
@@ -44,6 +46,7 @@ export function experimentDate(timestamp) {
 export function initialState() {
   return {
     schemaVersion: 4,
+    modelProfile: MODEL_PROFILE,
     scorerVersion: SCORER_VERSION,
     generation: 0,
     champion: { version: "v0", prompt: initialPrompt, score: null, scorerVersion: SCORER_VERSION },
@@ -66,7 +69,7 @@ export function extractText(response) {
   if (typeof response?.response === "string") return response.response.trim();
   if (typeof response?.response?.content === "string") return response.response.content.trim();
   if (typeof response?.choices?.[0]?.message?.content === "string") return response.choices[0].message.content.trim();
-  throw new Error("Workers AI returned no text");
+  throw new Error("Model returned no text");
 }
 
 function clean(text) {
@@ -161,7 +164,7 @@ function historicalFeedback(state) {
 async function generateStrategy(ai, state) {
   const response = await ai.run(modelName, {
     messages: [
-      { role: "system", content: "/no_think\n你研究如何更有效地产生技术摘要提示词候选。只返回 JSON，不能改变摘要任务、评分规则或候选必须忠于原文的约束。" },
+      { role: "system", content: "你研究如何更有效地产生技术摘要提示词候选。只返回 JSON，不能改变摘要任务、评分规则或候选必须忠于原文的约束。" },
       { role: "user", content: `当前生成策略：\n${state.strategy.instruction}\n\n最近开发集失败证据：\n${historicalFeedback(state)}\n\n提出一条不同且可检验的生成候选策略，重点解决多轮反复出现的问题。只返回 {"hypothesis":"为什么这条策略会更好","instruction":"给候选提示词生成器的具体操作指令"}。不要请求或猜测未公开验证文章。` }
     ],
     max_tokens: 650,
@@ -178,7 +181,7 @@ async function generateCandidate(ai, champion, strategy, feedback, id, excludedP
     : "";
   const response = await ai.run(modelName, {
     messages: [
-      { role: "system", content: `/no_think\n你负责改进技术文章的四段式中文摘要提示词。只返回有效 JSON。必须保留四段标题、忠于原文和禁止编造要求。\n候选生成策略：${strategy.instruction}` },
+      { role: "system", content: `你负责改进技术文章的四段式中文摘要提示词。只返回有效 JSON。必须保留四段标题、忠于原文和禁止编造要求。\n候选生成策略：${strategy.instruction}` },
       { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n今天两种策略使用相同修改方向：${focus}。请按自己的生成策略解决开发集具体失败；不要堆叠泛泛的核对要求。必须增加、删除或替换一条可执行的摘要行为规则；只换同义词、标点或措辞不算修改。只提出一个完整候选，并清楚写出行为变化。格式：{"hypothesis":"可检验的行为变化","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
     ],
     max_tokens: 1200,
@@ -232,7 +235,7 @@ async function runPrompt(context, prompt, samples) {
   const outputs = await Promise.all(samples.map(async sample => {
     const response = await context.ai.run(modelName, {
       messages: [
-        { role: "system", content: `/no_think\n${prompt}` },
+        { role: "system", content: prompt },
         { role: "user", content: `请根据下文完成任务。只输出摘要。\n\n${sample.article}` }
       ],
       max_tokens: 800,
@@ -278,7 +281,7 @@ export function rescoreMetrics(metrics) {
 
 function migrateLegacy(stored) {
   const fresh = initialState();
-  if (![2, 3].includes(stored?.schemaVersion)) return fresh;
+  if (![2, 3, 4].includes(stored?.schemaVersion)) return fresh;
   return {
     ...fresh, generation: stored.generation,
     champion: { ...stored.champion, score: null, scorerVersion: SCORER_VERSION },
@@ -286,15 +289,18 @@ function migrateLegacy(stored) {
     strategyGeneration: stored.strategyGeneration || 0,
     recentCandidatePrompts: stored.recentCandidatePrompts || [], seenCandidateKeys: stored.seenCandidateKeys || [],
     legacyBaseline: { schemaVersion: stored.schemaVersion, championVersion: stored.champion.version, score: stored.champion.score,
-      runId: stored.latestRun?.id },
-    history: (stored.history || []).map(item => ({ ...item, scorerVersion: item.scorerVersion || 3 })), updatedAt: stored.updatedAt
+      runId: stored.latestRun?.id, model: stored.latestRun?.model, evaluator: stored.latestRun?.evaluator,
+      modelProfile: stored.modelProfile || "legacy-workers-ai" },
+    history: (stored.history || []).map(item => ({ ...item, scorerVersion: item.scorerVersion || 3,
+      modelProfile: item.modelProfile || stored.modelProfile || "legacy-workers-ai" })), updatedAt: stored.updatedAt
   };
 }
 
 export async function getState(env) {
   const stored = await env.EVOLUTION.get(STATE_KEY, "json");
-  if (stored?.schemaVersion === 4) return stored;
-  return migrateLegacy(await env.EVOLUTION.get(LEGACY_STATE_KEY, "json") || await env.EVOLUTION.get("rsi:v2:state", "json"));
+  if (stored?.schemaVersion === 4 && stored.modelProfile === MODEL_PROFILE) return stored;
+  return migrateLegacy(stored || await env.EVOLUTION.get("rsi:v4:state", "json") ||
+    await env.EVOLUTION.get(LEGACY_STATE_KEY, "json") || await env.EVOLUTION.get("rsi:v2:state", "json"));
 }
 
 export function promotionDecision(candidate, baseline, holdoutBaseline) {
@@ -374,12 +380,12 @@ export function developmentFeedback(metrics, samples) {
   };
 }
 
-export async function runEvolution(env, timestamp = Date.now()) {
+export async function runEvolution(env, timestamp = Date.now(), modelClient = createModelClient(env)) {
   const date = experimentDate(timestamp);
   const state = await getState(env);
   if (state.latestRun?.date === date && state.latestRun.status === "completed") return { skipped: true, state };
   const startedAt = new Date().toISOString();
-  const context = createEvaluationContext(env.AI, env.JUDGE_MODEL || DEFAULT_JUDGE_MODEL);
+  const context = createEvaluationContext(modelClient, DEFAULT_JUDGE_MODEL);
   let calibration = null;
   try {
     calibration = await calibrateEvaluator(context, env.EVOLUTION);
@@ -438,13 +444,13 @@ export async function runEvolution(env, timestamp = Date.now()) {
         };
     const outcome = pairedModelCandidates ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
       : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
-    const audit = state.lastAudit?.championVersion === champion.version && state.lastAudit?.scorerVersion === SCORER_VERSION
-      ? state.lastAudit : { championVersion: champion.version, scorerVersion: SCORER_VERSION,
+    const audit = state.lastAudit?.championVersion === champion.version && state.lastAudit?.scorerVersion === SCORER_VERSION && state.lastAudit?.modelProfile === MODEL_PROFILE
+      ? state.lastAudit : { championVersion: champion.version, scorerVersion: SCORER_VERSION, modelProfile: MODEL_PROFILE,
           checkedAt: new Date().toISOString(), purpose: "report-only; excluded from optimization and promotion",
           samples: auditCorpus, metrics: await runPrompt(context, champion.prompt, auditCorpus) };
     const run = {
       id: crypto.randomUUID(), schemaVersion: 4, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
-      model: modelName, scorerVersion: SCORER_VERSION,
+      model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", scorerVersion: SCORER_VERSION,
       evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC }, datasetVersion: DATASET_VERSION,
       calibration, usage: context.usage, audit,
       strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: 42 },
@@ -475,7 +481,7 @@ export async function runEvolution(env, timestamp = Date.now()) {
       seenCandidateKeys: [...seenKeys, ...evaluated.map(item => clean(item.prompt))],
       latestRun: run,
       history: [...state.history, {
-        date, scorerVersion: SCORER_VERSION, generation, score: champion.score,
+        date, scorerVersion: SCORER_VERSION, modelProfile: MODEL_PROFILE, generation, score: champion.score,
         holdoutScore: winner?.holdout.score ?? holdoutBaseline.score,
         accepted: Boolean(winner), focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "补位候选未晋级"),
         strategy: strategyResult.strategy.version
@@ -486,9 +492,9 @@ export async function runEvolution(env, timestamp = Date.now()) {
     await env.EVOLUTION.put(STATE_KEY, JSON.stringify(next));
     return { skipped: false, state: next };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = redactError(error instanceof Error ? error.message : String(error), env.OPENROUTER_API_KEY);
     const run = { id: crypto.randomUUID(), schemaVersion: 4, scorerVersion: SCORER_VERSION, date, status: "failed", startedAt,
-      completedAt: new Date().toISOString(), evaluator: { model: context.model, version: EVALUATOR_VERSION },
+      completedAt: new Date().toISOString(), model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", evaluator: { model: context.model, version: EVALUATOR_VERSION },
       calibration, usage: context.usage, error: message };
     const next = { ...state, latestRun: run, updatedAt: run.completedAt };
     await env.EVOLUTION.put(`${RUN_PREFIX}${date}`, JSON.stringify(run));
@@ -505,6 +511,7 @@ export async function rescoreLatest() {
 export function publicState(state) {
   return {
     schemaVersion: state.schemaVersion, scorerVersion: SCORER_VERSION,
+    model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", baseUrl: OPENROUTER_BASE_URL,
     generation: state.generation, champion: state.champion, legacyBaseline: state.legacyBaseline || null,
     strategy: state.strategy, challenger: state.challenger, strategyHistory: state.strategyHistory,
     latestRun: state.latestRun, history: state.history, updatedAt: state.updatedAt,

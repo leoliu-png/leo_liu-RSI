@@ -27,4 +27,4 @@ export const initialPrompt = `你是一名严谨的技术编辑。只依据给�
 术语：解释首次出现的关键技术术语；原文信息不足时写“原文未说明”。
 禁止补充原文以外的信息。全文不超过 450 字。`;
 
-export const modelName = "@cf/qwen/qwen3-30b-a3b-fp8";
+export { MODEL_NAME as modelName } from "./model.js";
