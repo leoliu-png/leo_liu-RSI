@@ -6,7 +6,11 @@ export function hasSnapshotEvidence(data) {
       !run.candidates.every(item => Array.isArray(item.metrics?.outputs) && Array.isArray(item.holdout?.outputs))) {
     return false;
   }
-  if (run.candidates.length === 2) return Boolean(run.strategyTrial);
+  if (run.candidates.length === 2 && run.strategyTrial) return true;
+  if (run.candidates.length === 2 && run.outcome === "fallback_candidates" && run.strategyTrial === null &&
+      run.candidates.some(item => item.source === "guardrail_fallback") &&
+      Array.isArray(run.candidateGeneration?.results) && run.candidateGeneration.results.length === 2 &&
+      run.candidateGeneration.results.some(item => item.fallbackUsed)) return true;
   const expectedOutcome = run.candidates.length === 1 ? "partial_candidates" : "generation_exhausted";
   if (run.outcome !== expectedOutcome || run.strategyTrial !== null ||
       !Array.isArray(run.candidateGeneration?.results) || run.candidateGeneration.results.length !== 2 ||

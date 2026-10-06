@@ -7,6 +7,28 @@ const RUN_PREFIX = "rsi:v3:run:";
 const HEADINGS = ["结论", "要点", "风险", "术语"];
 const SCORER_VERSION = 3;
 const MAX_CANDIDATE_ATTEMPTS = 3;
+const FALLBACK_RULES = {
+  C1: [
+    ["facts_scope", "逐条核对要点中的数字、对象和适用条件；缺少任何一项时，不把局部结果写成普遍结论。"],
+    ["facts_negation", "优先保留原文中的否定、例外和限制词；不得把可能、计划或假设改写成已发生的事实。"],
+    ["facts_source", "每条要点先找到原文中的直接依据；找不到对应语句的判断必须删除，不用常识补全。"],
+    ["facts_relation", "遇到比较或因果关系时，只保留原文明确建立的关系；不得自行推断原因、优势或影响。"],
+    ["facts_quantity", "原文有比例、时间或数量时，同时保留计量对象和单位；不要只摘录孤立数字。"],
+    ["facts_priority", "先覆盖结论所依赖的关键证据，再写背景信息；同一事实只出现一次，避免背景挤占要点。"],
+    ["facts_attribution", "区分作者观点、实验观察和已证实事实；将观点归于原文作者，不改写成无条件事实。"],
+    ["facts_boundary", "摘要中的范围、时间和人群必须与原文一致；不能将单次实验或局部样本扩展到全部场景。"]
+  ],
+  C2: [
+    ["risk_evidence", "风险段区分已观察到的问题与潜在风险；原文只提出可能性时，不得写成已经发生。"],
+    ["risk_absence", "原文没有明确风险或限制时，风险段写原文未说明；不要依据行业常识自行补充。"],
+    ["term_context", "术语段仅解释原文定义或上下文能直接核对的含义；外部百科知识不得加入。"],
+    ["term_ambiguity", "术语有多种可能含义时，只采用文章上下文支持的含义；证据不足写原文未说明。"],
+    ["brevity_duplicate", "输出前删除四段之间重复的事实；保留数字、名称和限定词，再压缩连接词与套话。"],
+    ["brevity_structure", "结论仅保留一个中心判断；要点各写一个可核查事实，风险和术语不重复结论内容。"],
+    ["risk_condition", "风险段写清触发限制的前提和影响范围；原文未给出前提或范围时不要猜测。"],
+    ["term_first_use", "只解释摘要中实际出现且影响理解的技术术语；不为未出现的概念额外造定义。"]
+  ]
+};
 const INITIAL_STRATEGY = {
   version: "s0",
   hypothesis: "针对事实遗漏与冗长问题，只做一处可验证的提示词修改",
@@ -30,6 +52,7 @@ export function initialState() {
     strategyHistory: [],
     feedbackHistory: [],
     recentCandidatePrompts: [],
+    seenCandidateKeys: [],
     latestRun: null,
     history: [],
     updatedAt: null
@@ -46,6 +69,29 @@ export function extractText(response) {
 
 function clean(text) {
   return text.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase();
+}
+
+function meaningfulText(text) {
+  return clean(text).replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function editDistance(a, b) {
+  const left = Array.from(meaningfulText(a));
+  const right = Array.from(meaningfulText(b));
+  let row = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= right.length; j++) {
+      next[j] = Math.min(next[j - 1] + 1, row[j] + 1, row[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1));
+    }
+    row = next;
+  }
+  return row[right.length];
+}
+
+function hasSubstantiveChange(prompt, reference) {
+  const threshold = Math.max(24, Math.ceil(Math.min(meaningfulText(prompt).length, meaningfulText(reference).length) * 0.12));
+  return editDistance(prompt, reference) >= threshold;
 }
 
 export function scoreSummary(summary, sample) {
@@ -131,7 +177,7 @@ async function generateCandidate(ai, champion, strategy, feedback, id, excludedP
   const response = await ai.run(modelName, {
     messages: [
       { role: "system", content: `/no_think\n你负责改进技术文章的四段式中文摘要提示词。只返回有效 JSON。必须保留四段标题、忠于原文和禁止编造要求。\n候选生成策略：${strategy.instruction}` },
-      { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n只提出一个与当前冠军及已有候选不同的完整候选，并清楚写出单一修改点。格式：{"hypothesis":"单一修改点","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
+      { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n${id === "C1" ? "本候选专注于事实、数字、适用条件或证据核对。" : "本候选专注于风险与术语边界、重复事实压缩或段落分工；不得重复事实核对候选的修改。"}必须增加、删除或替换一条可执行的摘要行为规则；只换同义词、标点或措辞不算修改。只提出一个完整候选，并清楚写出行为变化。格式：{"hypothesis":"可检验的行为变化","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
     ],
     max_tokens: 1200,
     temperature: 0.7
@@ -139,21 +185,45 @@ async function generateCandidate(ai, champion, strategy, feedback, id, excludedP
   return parseCandidate(extractText(response), id, strategy.version || `trial-${strategy.id.slice(0, 8)}`);
 }
 
-async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts) {
+function fallbackCandidate(champion, id, occupied, sameDayPrompt) {
+  const base = champion.replace(/\n补充核验规则：[^\n]*$/, "").trim();
+  const rules = FALLBACK_RULES[id];
+  const plans = [
+    ...rules.map(rule => [rule]),
+    ...rules.flatMap((rule, index) => rules.slice(index + 1).map(other => [rule, other]))
+  ];
+  for (const plan of plans) {
+    if (plan.some(([, text]) => clean(base).includes(clean(text)))) continue;
+    const prompt = `${base}\n补充核验规则：${plan.map(([, text]) => text).join(" ")}`;
+    if (prompt.length > 1200 || occupied.has(clean(prompt)) ||
+        !hasSubstantiveChange(prompt, champion) ||
+        (sameDayPrompt && !hasSubstantiveChange(prompt, sameDayPrompt))) continue;
+    return {
+      id, strategyVersion: "rules-v1", prompt,
+      hypothesis: `增加可核验的摘要步骤：${plan.map(([, text]) => text).join(" ").slice(0, 145)}`,
+      source: "guardrail_fallback", interventionIds: plan.map(([name]) => name)
+    };
+  }
+  return null;
+}
+
+async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts, seenKeys, sameDayPrompt = null) {
   const excluded = [...occupiedPrompts];
-  const occupied = new Set(excluded.map(clean));
+  const occupied = new Set([...excluded.map(clean), ...seenKeys]);
   const rejected = [];
   for (let attempt = 1; attempt <= MAX_CANDIDATE_ATTEMPTS; attempt++) {
     const candidate = await generateCandidate(ai, champion, strategy, feedback, id, excluded);
     const normalized = clean(candidate.prompt);
-    if (!occupied.has(normalized)) {
-      return { candidate, attempts: attempt, rejected };
-    }
-    rejected.push({ attempt, reason: "与冠军、历史候选或当日已接受候选重复", prompt: candidate.prompt });
+    const reason = occupied.has(normalized) ? "与冠军、历史候选或当日已接受候选重复"
+      : !hasSubstantiveChange(candidate.prompt, champion) ? "与冠军相比改动过小，缺少可检验的新行为规则"
+      : sameDayPrompt && !hasSubstantiveChange(candidate.prompt, sameDayPrompt) ? "与当日已有候选改动过近" : null;
+    if (!reason) return { candidate: { ...candidate, source: "model" }, attempts: attempt, rejected, fallbackUsed: false };
+    rejected.push({ attempt, reason, prompt: candidate.prompt });
     excluded.push(candidate.prompt);
     occupied.add(normalized);
   }
-  return { candidate: null, attempts: MAX_CANDIDATE_ATTEMPTS, rejected };
+  const fallback = fallbackCandidate(champion, id, occupied, sameDayPrompt);
+  return { candidate: fallback, attempts: MAX_CANDIDATE_ATTEMPTS, rejected, fallbackUsed: Boolean(fallback) };
 }
 
 async function runPrompt(ai, prompt, samples) {
@@ -264,15 +334,17 @@ export async function runEvolution(env, timestamp = Date.now()) {
     const workingState = { ...state, challenger };
     const feedback = historicalFeedback(state);
     const occupiedPrompts = [state.champion.prompt, ...(state.recentCandidatePrompts || []).slice(-10)];
-    const first = await generateUniqueCandidate(env.AI, state.champion.prompt, state.strategy, feedback, "C1", occupiedPrompts);
+    const seenKeys = state.seenCandidateKeys || [];
+    const first = await generateUniqueCandidate(env.AI, state.champion.prompt, state.strategy, feedback, "C1", occupiedPrompts, seenKeys);
     const second = await generateUniqueCandidate(env.AI, state.champion.prompt, challenger, feedback, "C2",
-      first.candidate ? [...occupiedPrompts, first.candidate.prompt] : occupiedPrompts);
+      first.candidate ? [...occupiedPrompts, first.candidate.prompt] : occupiedPrompts,
+      seenKeys, first.candidate?.prompt);
     const candidates = [first.candidate, second.candidate].filter(Boolean);
     const candidateGeneration = {
       maxAttemptsPerCandidate: MAX_CANDIDATE_ATTEMPTS,
       results: [
-        { id: "C1", strategyVersion: state.strategy.version, attempts: first.attempts, accepted: Boolean(first.candidate), rejected: first.rejected },
-        { id: "C2", strategyVersion: challenger.version || `trial-${challenger.id.slice(0, 8)}`, attempts: second.attempts, accepted: Boolean(second.candidate), rejected: second.rejected }
+        { id: "C1", strategyVersion: first.candidate?.strategyVersion || state.strategy.version, attempts: first.attempts, accepted: Boolean(first.candidate), fallbackUsed: first.fallbackUsed, rejected: first.rejected },
+        { id: "C2", strategyVersion: second.candidate?.strategyVersion || challenger.version || `trial-${challenger.id.slice(0, 8)}`, attempts: second.attempts, accepted: Boolean(second.candidate), fallbackUsed: second.fallbackUsed, rejected: second.rejected }
       ]
     };
     const validationSamples = holdoutForDate(date);
@@ -295,13 +367,17 @@ export async function runEvolution(env, timestamp = Date.now()) {
     const champion = winner
       ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score }
       : { ...state.champion, score: baseline.score };
-    const strategyResult = evaluated.length === 2
+    const pairedModelCandidates = evaluated.length === 2 && evaluated.every(item => item.source === "model");
+    const strategyResult = pairedModelCandidates
       ? updateStrategyTrial(workingState, date, evaluated[0], evaluated[1])
       : {
           trial: null, strategy: state.strategy, challenger: null, strategyGeneration: state.strategyGeneration,
-          decision: "候选去重重试后不足两条不同候选；不计策略胜负，回退未完成配对的挑战策略"
+          decision: evaluated.length === 2
+            ? "模型候选不足，使用预定义核验规则补位；不把补位成绩计入挑战策略胜负"
+            : "候选去重及核验规则补位后仍不足两条；不计策略胜负，回退未完成配对的挑战策略"
         };
-    const outcome = evaluated.length === 2 ? "evaluated" : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
+    const outcome = pairedModelCandidates ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
+      : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
     const run = {
       id: crypto.randomUUID(), schemaVersion: 3, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
       model: modelName, scorerVersion: SCORER_VERSION,
@@ -310,9 +386,10 @@ export async function runEvolution(env, timestamp = Date.now()) {
       accepted: Boolean(winner), selectedId: winner?.id ?? null,
       championVersion: champion.version, championScore: champion.score,
       strategyTrial: strategyResult.trial, strategyDecision: strategyResult.decision,
-      reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛${outcome === "partial_candidates" ? "；策略配对未完成" : ""}`
-        : outcome === "generation_exhausted" ? "两条候选均在去重重试后无有效新 Prompt；仅完成冠军基线测评，冠军保持不变"
-        : outcome === "partial_candidates" ? "仅一条不同候选通过去重；未完成策略配对，冠军保持不变"
+      reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛${pairedModelCandidates ? "" : "；策略配对未完成或未计分"}`
+        : outcome === "generation_exhausted" ? "模型和核验规则库均未得到有效新 Prompt；仅完成冠军基线测评，冠军保持不变"
+        : outcome === "partial_candidates" ? "仅一条实质不同候选通过验证；未完成策略配对，冠军保持不变"
+        : outcome === "fallback_candidates" ? "已用核验规则补齐两条实质不同候选，但均未通过晋级门槛；冠军保持不变"
         : "所有候选未同时通过开发集与新文章验证；冠军保持不变"
     };
     const feedbackRecord = {
@@ -328,11 +405,12 @@ export async function runEvolution(env, timestamp = Date.now()) {
       strategyHistory: strategyResult.trial ? [...state.strategyHistory, strategyResult.trial].slice(-30) : state.strategyHistory,
       feedbackHistory: [...state.feedbackHistory, feedbackRecord].slice(-10),
       recentCandidatePrompts: [...(state.recentCandidatePrompts || []), ...evaluated.map(item => item.prompt)].slice(-10),
+      seenCandidateKeys: [...seenKeys, ...evaluated.map(item => clean(item.prompt))],
       latestRun: run,
       history: [...state.history, {
         date, generation, score: champion.score,
         holdoutScore: winner?.holdout.score ?? holdoutBaseline.score,
-        accepted: Boolean(winner), focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "候选重复，未晋级"),
+        accepted: Boolean(winner), focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "补位候选未晋级"),
         strategy: strategyResult.strategy.version
       }].slice(-30),
       updatedAt: run.completedAt

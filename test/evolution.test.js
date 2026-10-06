@@ -8,14 +8,14 @@ import {
   promotionDecision, rescoreMetrics, runEvolution, scoreSummary, updateStrategyTrial
 } from "../src/evolution.js";
 
-const promptA = "候选 A。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；输出前核对所有具体条件，禁止臆造原文以外的信息，全文控制在 450 字以内。";
-const promptB = "候选 B。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；先压缩连接词，再输出完整的四段摘要，禁止编造，全文控制在 450 字以内。";
+const promptA = "候选 A。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；输出前逐项核对每个数字的计量对象、适用范围、前提条件和原文证据，找不到直接依据就删除该断言，禁止臆造原文以外的信息，全文控制在 450 字以内。";
+const promptB = "候选 B。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；风险段区分已观察到的问题和未证实的可能性，术语段只解释文中实际定义的概念，并删除四段间重复事实，禁止编造，全文控制在 450 字以内。";
 
 function fakeEnvironment({ fail = false, holdoutFail = false, proposalPrompt } = {}) {
   const values = new Map();
   let calls = 0;
   let proposalCalls = 0;
-  const samples = [...benchmark, ...holdoutForDate("2026-09-24"), ...holdoutForDate("2026-09-25")];
+  const samples = [...benchmark, ...[24, 25, 26, 27].flatMap(day => holdoutForDate(`2026-09-${day}`))];
   const env = {
     EVOLUTION: {
       async get(key) { return values.has(key) ? JSON.parse(values.get(key)) : null; },
@@ -123,21 +123,25 @@ test("duplicate proposals are retried and never evaluated as distinct candidates
   assert.equal(mock.proposalCalls(), 4);
 });
 
-test("exhausted duplicate retries preserve the champion and complete an evidenced no-op", async () => {
+test("exhausted duplicate retries use distinct actionable fallback rules without fake strategy wins", async () => {
   const champion = initialState().champion.prompt;
   const mock = fakeEnvironment({ proposalPrompt: () => champion });
   const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
   const run = result.state.latestRun;
   assert.equal(run.status, "completed");
-  assert.equal(run.outcome, "generation_exhausted");
+  assert.equal(run.outcome, "fallback_candidates");
   assert.equal(run.accepted, false);
-  assert.deepEqual(run.candidates, []);
+  assert.equal(run.candidates.length, 2);
+  assert.ok(run.candidates.every(item => item.source === "guardrail_fallback"));
+  assert.notEqual(run.candidates[0].prompt, run.candidates[1].prompt);
+  assert.ok(run.candidates.every(item => item.prompt !== champion && item.prompt.includes("补充核验规则")));
   assert.equal(run.strategyTrial, null);
   assert.equal(run.baseline.outputs.length, 3);
   assert.equal(run.holdoutBaseline.outputs.length, 2);
   assert.equal(result.state.champion.version, "v0");
   assert.equal(result.state.challenger, null);
   assert.deepEqual(run.candidateGeneration.results.map(item => item.rejected.length), [3, 3]);
+  assert.deepEqual(run.candidateGeneration.results.map(item => item.fallbackUsed), [true, true]);
   assert.equal(hasSnapshotEvidence(result.state), true);
   assert.equal(hasSnapshotEvidence({ ...result.state, latestRun: { ...run, candidateGeneration: null } }), false);
   assert.equal(mock.proposalCalls(), 6);
@@ -147,14 +151,16 @@ test("exhausted duplicate retries preserve the champion and complete an evidence
   assert.equal(mock.proposalCalls(), 6);
 });
 
-test("a single distinct candidate can be judged without fabricating a paired strategy trial", async () => {
+test("a single model candidate is paired with fallback without fabricating a strategy trial", async () => {
   const mock = fakeEnvironment({ proposalPrompt: () => promptA });
   const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
   const run = result.state.latestRun;
   assert.equal(run.status, "completed");
-  assert.equal(run.outcome, "partial_candidates");
-  assert.equal(run.candidates.length, 1);
+  assert.equal(run.outcome, "fallback_candidates");
+  assert.equal(run.candidates.length, 2);
   assert.equal(run.candidates[0].id, "C1");
+  assert.equal(run.candidates[0].source, "model");
+  assert.equal(run.candidates[1].source, "guardrail_fallback");
   assert.equal(run.strategyTrial, null);
   assert.equal(result.state.strategyHistory.length, 0);
   assert.equal(run.candidateGeneration.results[1].rejected.length, 3);
@@ -168,7 +174,44 @@ test("previously evaluated prompts are excluded from a later experiment", async 
   const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
   assert.equal(result.state.latestRun.candidateGeneration.results[0].rejected.length, 1);
   assert.ok(result.state.latestRun.candidates.every(item => item.prompt !== promptA));
-  assert.equal(result.state.latestRun.outcome, "partial_candidates");
+  assert.equal(result.state.latestRun.outcome, "fallback_candidates");
+});
+
+test("stylistic rewording alone is rejected and replaced by an actionable candidate", async () => {
+  const champion = initialState().champion.prompt;
+  const nearSynonym = champion.replace("禁止补充原文以外的信息", "不得添加原文未提及的内容");
+  const mock = fakeEnvironment({ proposalPrompt: () => nearSynonym });
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(result.state.latestRun.outcome, "fallback_candidates");
+  assert.ok(result.state.latestRun.candidates.every(item => item.prompt !== nearSynonym));
+  assert.equal(result.state.latestRun.candidateGeneration.results[0].rejected[0].reason,
+    "与冠军相比改动过小，缺少可检验的新行为规则");
+});
+
+test("an archived candidate is not reused even after it leaves the recent prompt window", async () => {
+  const mock = fakeEnvironment({ proposalPrompt: call => call === 1 ? promptA : promptB });
+  const state = initialState();
+  state.seenCandidateKeys = [promptA.normalize("NFKC").replace(/\s+/g, "").toLowerCase()];
+  mock.values.set(STATE_KEY, JSON.stringify(state));
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(result.state.latestRun.candidateGeneration.results[0].rejected[0].reason, "与冠军、历史候选或当日已接受候选重复");
+  assert.ok(result.state.latestRun.candidates.every(item => item.prompt !== promptA));
+});
+
+test("fallback rules remain distinct across multiple days of repeated model output", async () => {
+  const champion = initialState().champion.prompt;
+  const mock = fakeEnvironment({ proposalPrompt: () => champion });
+  const prompts = new Set();
+  for (const day of [24, 25, 26, 27]) {
+    const result = await runEvolution(mock.env, Date.parse(`2026-09-${day}T01:00:00Z`));
+    assert.equal(result.state.latestRun.outcome, "fallback_candidates");
+    for (const candidate of result.state.latestRun.candidates) {
+      assert.equal(prompts.has(candidate.prompt), false);
+      prompts.add(candidate.prompt);
+    }
+    assert.equal(result.state.strategyHistory.length, 0);
+  }
+  assert.equal(prompts.size, 8);
 });
 
 test("challenger strategy requires two paired wins and then replaces the incumbent", () => {
