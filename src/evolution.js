@@ -1,11 +1,11 @@
 import { benchmark, initialPrompt, modelName } from "./benchmark.js";
-import { holdoutForDate } from "./holdout.js";
+import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, validationCorpus, validationForDate } from "./corpus.js";
+import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
 
-export const STATE_KEY = "rsi:v3:state";
-const LEGACY_STATE_KEY = "rsi:v2:state";
-const RUN_PREFIX = "rsi:v3:run:";
+export const STATE_KEY = "rsi:v4:state";
+const LEGACY_STATE_KEY = "rsi:v3:state";
+const RUN_PREFIX = "rsi:v4:run:";
 const HEADINGS = ["结论", "要点", "风险", "术语"];
-const SCORER_VERSION = 3;
 const MAX_CANDIDATE_ATTEMPTS = 3;
 const FALLBACK_RULES = {
   C1: [
@@ -43,9 +43,10 @@ export function experimentDate(timestamp) {
 
 export function initialState() {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    scorerVersion: SCORER_VERSION,
     generation: 0,
-    champion: { version: "v0", prompt: initialPrompt, score: null },
+    champion: { version: "v0", prompt: initialPrompt, score: null, scorerVersion: SCORER_VERSION },
     strategyGeneration: 0,
     strategy: { ...INITIAL_STRATEGY },
     challenger: null,
@@ -55,6 +56,7 @@ export function initialState() {
     seenCandidateKeys: [],
     latestRun: null,
     history: [],
+    lastAudit: null,
     updatedAt: null
   };
 }
@@ -144,7 +146,7 @@ function parseCandidate(text, id, strategyVersion) {
 
 function historicalFeedback(state) {
   const records = state.feedbackHistory?.slice(-5) || [];
-  if (!records.length && state.latestRun?.status === "completed") {
+  if (!records.length && state.latestRun?.status === "completed" && state.latestRun.scorerVersion === SCORER_VERSION) {
     records.push({
       date: state.latestRun.date,
       candidates: state.latestRun.candidates?.map(item => ({
@@ -170,14 +172,14 @@ async function generateStrategy(ai, state) {
   return challenger;
 }
 
-async function generateCandidate(ai, champion, strategy, feedback, id, excludedPrompts = []) {
+async function generateCandidate(ai, champion, strategy, feedback, id, excludedPrompts = [], focus = "事实、条件和证据核对") {
   const exclusions = excludedPrompts.length
     ? `\n\n以下候选已经存在或因重复被拒绝，新的完整提示词不得与其中任何一条相同（仅改变空格也不算新候选）：\n${excludedPrompts.map((prompt, index) => `${index + 1}. ${prompt}`).join("\n")}`
     : "";
   const response = await ai.run(modelName, {
     messages: [
       { role: "system", content: `/no_think\n你负责改进技术文章的四段式中文摘要提示词。只返回有效 JSON。必须保留四段标题、忠于原文和禁止编造要求。\n候选生成策略：${strategy.instruction}` },
-      { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n${id === "C1" ? "本候选专注于事实、数字、适用条件或证据核对。" : "本候选专注于风险与术语边界、重复事实压缩或段落分工；不得重复事实核对候选的修改。"}必须增加、删除或替换一条可执行的摘要行为规则；只换同义词、标点或措辞不算修改。只提出一个完整候选，并清楚写出行为变化。格式：{"hypothesis":"可检验的行为变化","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
+      { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n今天两种策略使用相同修改方向：${focus}。请按自己的生成策略解决开发集具体失败；不要堆叠泛泛的核对要求。必须增加、删除或替换一条可执行的摘要行为规则；只换同义词、标点或措辞不算修改。只提出一个完整候选，并清楚写出行为变化。格式：{"hypothesis":"可检验的行为变化","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
     ],
     max_tokens: 1200,
     temperature: 0.7
@@ -207,12 +209,12 @@ function fallbackCandidate(champion, id, occupied, sameDayPrompt) {
   return null;
 }
 
-async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts, seenKeys, sameDayPrompt = null) {
+async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts, seenKeys, sameDayPrompt = null, focus) {
   const excluded = [...occupiedPrompts];
   const occupied = new Set([...excluded.map(clean), ...seenKeys]);
   const rejected = [];
   for (let attempt = 1; attempt <= MAX_CANDIDATE_ATTEMPTS; attempt++) {
-    const candidate = await generateCandidate(ai, champion, strategy, feedback, id, excluded);
+    const candidate = await generateCandidate(ai, champion, strategy, feedback, id, excluded, focus);
     const normalized = clean(candidate.prompt);
     const reason = occupied.has(normalized) ? "与冠军、历史候选或当日已接受候选重复"
       : !hasSubstantiveChange(candidate.prompt, champion) ? "与冠军相比改动过小，缺少可检验的新行为规则"
@@ -226,29 +228,39 @@ async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occ
   return { candidate: fallback, attempts: MAX_CANDIDATE_ATTEMPTS, rejected, fallbackUsed: Boolean(fallback) };
 }
 
-async function runPrompt(ai, prompt, samples) {
+async function runPrompt(context, prompt, samples) {
   const outputs = await Promise.all(samples.map(async sample => {
-    const response = await ai.run(modelName, {
+    const response = await context.ai.run(modelName, {
       messages: [
         { role: "system", content: `/no_think\n${prompt}` },
         { role: "user", content: `请根据下文完成任务。只输出摘要。\n\n${sample.article}` }
       ],
-      max_tokens: 460,
+      max_tokens: 800,
       temperature: 0,
       seed: 42
     });
     const summary = extractText(response);
-    return { sampleId: sample.id, title: sample.title, summary, ...scoreSummary(summary, sample) };
+    return { sampleId: sample.id, title: sample.title, summary, sources: sample.sources,
+      ...await judgeSummary(context, sample, summary) };
   }));
   return aggregateOutputs(outputs);
 }
 
 function aggregateOutputs(outputs) {
+  const semantic = outputs.every(item => item.scorerVersion === SCORER_VERSION);
+  const dimensions = semantic ? Object.fromEntries(Object.keys(RUBRIC).map(key => [key,
+    Number((outputs.reduce((sum, item) => sum + item.dimensions[key], 0) / outputs.length).toFixed(2))])) : undefined;
   return {
+    scorerVersion: semantic ? SCORER_VERSION : 3,
     score: Number((outputs.reduce((sum, item) => sum + item.score, 0) / outputs.length).toFixed(1)),
     coverage: Number((outputs.reduce((sum, item) => sum + item.coverage, 0) / outputs.length).toFixed(3)),
     format: Number((outputs.reduce((sum, item) => sum + item.format, 0) / outputs.length).toFixed(3)),
     characters: Math.round(outputs.reduce((sum, item) => sum + item.characters, 0) / outputs.length),
+    accuracy: semantic ? Number((outputs.reduce((sum, item) => sum + item.accuracy, 0) / outputs.length).toFixed(3)) : undefined,
+    constraintPreservation: semantic ? Number((outputs.reduce((sum, item) => sum + item.constraintPreservation, 0) / outputs.length).toFixed(3)) : undefined,
+    eligible: semantic ? outputs.every(item => item.eligible) : undefined,
+    hardFailure: outputs.some(item => item.hardFailure), dimensions,
+    errors: outputs.flatMap(item => (item.errors || []).map(error => ({ sampleId: item.sampleId, title: item.title, ...error }))),
     forbidden: outputs.flatMap(item => item.forbidden),
     missing: [...new Set(outputs.flatMap(item => item.missing))],
     outputs
@@ -266,20 +278,34 @@ export function rescoreMetrics(metrics) {
 
 function migrateLegacy(stored) {
   const fresh = initialState();
-  if (stored?.schemaVersion !== 2) return fresh;
+  if (![2, 3].includes(stored?.schemaVersion)) return fresh;
   return {
-    ...fresh, generation: stored.generation, champion: stored.champion,
-    latestRun: stored.latestRun, history: stored.history || [], updatedAt: stored.updatedAt
+    ...fresh, generation: stored.generation,
+    champion: { ...stored.champion, score: null, scorerVersion: SCORER_VERSION },
+    strategy: stored.strategy || fresh.strategy,
+    strategyGeneration: stored.strategyGeneration || 0,
+    recentCandidatePrompts: stored.recentCandidatePrompts || [], seenCandidateKeys: stored.seenCandidateKeys || [],
+    legacyBaseline: { schemaVersion: stored.schemaVersion, championVersion: stored.champion.version, score: stored.champion.score,
+      runId: stored.latestRun?.id },
+    history: (stored.history || []).map(item => ({ ...item, scorerVersion: item.scorerVersion || 3 })), updatedAt: stored.updatedAt
   };
 }
 
 export async function getState(env) {
   const stored = await env.EVOLUTION.get(STATE_KEY, "json");
-  if (stored?.schemaVersion === 3) return stored;
-  return migrateLegacy(await env.EVOLUTION.get(LEGACY_STATE_KEY, "json"));
+  if (stored?.schemaVersion === 4) return stored;
+  return migrateLegacy(await env.EVOLUTION.get(LEGACY_STATE_KEY, "json") || await env.EVOLUTION.get("rsi:v2:state", "json"));
 }
 
 export function promotionDecision(candidate, baseline, holdoutBaseline) {
+  if (candidate.metrics.scorerVersion === SCORER_VERSION) {
+    if (!candidate.metrics.eligible) return { eligible: false, reason: "开发集存在事实错误、编造或格式/长度不合规" };
+    if (!candidate.holdout.eligible) return { eligible: false, reason: "隔离验证文章存在事实错误、编造或格式/长度不合规" };
+    if (candidate.metrics.accuracy < baseline.accuracy || candidate.metrics.constraintPreservation < baseline.constraintPreservation ||
+        candidate.holdout.accuracy < holdoutBaseline.accuracy || candidate.holdout.constraintPreservation < holdoutBaseline.constraintPreservation) {
+      return { eligible: false, reason: "事实准确性或条件保留下降" };
+    }
+  }
   if (candidate.metrics.forbidden.length) return { eligible: false, reason: "开发集出现禁用断言" };
   if (candidate.metrics.coverage < baseline.coverage) return { eligible: false, reason: "开发集事实覆盖下降" };
   if (candidate.metrics.score < baseline.score + 2) return { eligible: false, reason: "开发集综合分提升不足 2 分" };
@@ -290,6 +316,10 @@ export function promotionDecision(candidate, baseline, holdoutBaseline) {
 }
 
 export function challengerBeatsIncumbent(current, challenger) {
+  if (challenger.metrics.scorerVersion === SCORER_VERSION && (!challenger.metrics.eligible || !challenger.holdout.eligible ||
+      challenger.metrics.accuracy < current.metrics.accuracy || challenger.holdout.accuracy < current.holdout.accuracy ||
+      challenger.metrics.constraintPreservation < current.metrics.constraintPreservation ||
+      challenger.holdout.constraintPreservation < current.holdout.constraintPreservation)) return false;
   return challenger.metrics.score >= current.metrics.score + 2 &&
     challenger.holdout.score >= current.holdout.score + 1 &&
     challenger.metrics.coverage >= current.metrics.coverage &&
@@ -298,10 +328,11 @@ export function challengerBeatsIncumbent(current, challenger) {
 }
 
 export function updateStrategyTrial(state, date, current, candidate) {
+  if (current.focus !== candidate.focus) throw new Error("Strategy candidates used different intervention directions");
   const challenger = state.challenger;
   const challengerWon = challengerBeatsIncumbent(current, candidate);
   const trial = {
-    date, incumbent: state.strategy.version, challengerId: challenger.id,
+    date, scorerVersion: SCORER_VERSION, focus: current.focus, incumbent: state.strategy.version, challengerId: challenger.id,
     incumbentDevelopmentScore: current.metrics.score, challengerDevelopmentScore: candidate.metrics.score,
     incumbentHoldoutScore: current.holdout.score, challengerHoldoutScore: candidate.holdout.score,
     challengerWon
@@ -324,21 +355,55 @@ export function updateStrategyTrial(state, date, current, candidate) {
   return { trial, strategy, challenger: nextChallenger, strategyGeneration, decision };
 }
 
+export function developmentFeedback(metrics, samples) {
+  return {
+    score: metrics.score, dimensions: metrics.dimensions, accuracy: metrics.accuracy,
+    coverage: metrics.coverage, constraintPreservation: metrics.constraintPreservation, characters: metrics.characters,
+    samples: metrics.outputs.map(output => {
+      const sample = samples.find(item => item.id === output.sampleId);
+      return { id: output.sampleId, score: output.score, dimensions: output.dimensions,
+        issues: [
+          ...output.errors.slice(0, 3).map(error => ({ summary: error.text, problem: error.reason, evidence: error.evidence })),
+          ...output.judgment.facts.filter(row => ["partial", "omitted"].includes(row.status)).slice(0, 2).map(row => ({
+            problem: row.reason, missingFact: sample.facts.find(fact => fact.id === row.id).text,
+            evidence: sample.facts.find(fact => fact.id === row.id).evidenceIds.map(id => sample.sources.find(source => source.id === id)) })),
+          ...output.judgment.constraints.filter(row => row.status === "omitted").slice(0, 2).map(row => ({ problem: row.reason,
+            missingCondition: sample.constraints.find(item => item.id === row.id).text }))
+        ] };
+    })
+  };
+}
+
 export async function runEvolution(env, timestamp = Date.now()) {
   const date = experimentDate(timestamp);
   const state = await getState(env);
   if (state.latestRun?.date === date && state.latestRun.status === "completed") return { skipped: true, state };
   const startedAt = new Date().toISOString();
+  const context = createEvaluationContext(env.AI, env.JUDGE_MODEL || DEFAULT_JUDGE_MODEL);
+  let calibration = null;
   try {
-    const challenger = state.challenger || await generateStrategy(env.AI, state);
+    calibration = await calibrateEvaluator(context, env.EVOLUTION);
+    if (!calibration.passed) throw new Error(`Evaluator calibration rejected: ${calibration.results.filter(item => !item.passed).map(item => item.id).join(", ")}`);
+    const developmentSamples = developmentForDate(date);
+    const validationSamples = validationForDate(date);
+    const [baseline, holdoutBaseline] = await Promise.all([
+      runPrompt(context, state.champion.prompt, developmentSamples),
+      runPrompt(context, state.champion.prompt, validationSamples)
+    ]);
+    const baselineFeedback = developmentFeedback(baseline, developmentSamples);
+    const proposalState = { ...state, feedbackHistory: [...state.feedbackHistory,
+      { date, baseline: baselineFeedback, instruction: "基于具体错误或遗漏改进；分项已满分时不要重复添加相同要求" }] };
+    const challenger = state.challenger || await generateStrategy(context.ai, proposalState);
     const workingState = { ...state, challenger };
-    const feedback = historicalFeedback(state);
+    const feedback = historicalFeedback(proposalState);
+    const focus = ["事实、数字、否定及适用条件", "信息完整性和术语/风险边界", "跨段重复与表达清晰度"]
+      [Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000) % 3];
     const occupiedPrompts = [state.champion.prompt, ...(state.recentCandidatePrompts || []).slice(-10)];
     const seenKeys = state.seenCandidateKeys || [];
-    const first = await generateUniqueCandidate(env.AI, state.champion.prompt, state.strategy, feedback, "C1", occupiedPrompts, seenKeys);
-    const second = await generateUniqueCandidate(env.AI, state.champion.prompt, challenger, feedback, "C2",
+    const first = await generateUniqueCandidate(context.ai, state.champion.prompt, state.strategy, feedback, "C1", occupiedPrompts, seenKeys, null, focus);
+    const second = await generateUniqueCandidate(context.ai, state.champion.prompt, challenger, feedback, "C2",
       first.candidate ? [...occupiedPrompts, first.candidate.prompt] : occupiedPrompts,
-      seenKeys, first.candidate?.prompt);
+      seenKeys, first.candidate?.prompt, focus);
     const candidates = [first.candidate, second.candidate].filter(Boolean);
     const candidateGeneration = {
       maxAttemptsPerCandidate: MAX_CANDIDATE_ATTEMPTS,
@@ -347,26 +412,21 @@ export async function runEvolution(env, timestamp = Date.now()) {
         { id: "C2", strategyVersion: second.candidate?.strategyVersion || challenger.version || `trial-${challenger.id.slice(0, 8)}`, attempts: second.attempts, accepted: Boolean(second.candidate), fallbackUsed: second.fallbackUsed, rejected: second.rejected }
       ]
     };
-    const validationSamples = holdoutForDate(date);
-    const [baseline, holdoutBaseline] = await Promise.all([
-      runPrompt(env.AI, state.champion.prompt, benchmark),
-      runPrompt(env.AI, state.champion.prompt, validationSamples)
-    ]);
     const evaluated = [];
     for (const item of candidates) {
       const [metrics, holdout] = await Promise.all([
-        runPrompt(env.AI, item.prompt, benchmark),
-        runPrompt(env.AI, item.prompt, validationSamples)
+        runPrompt(context, item.prompt, developmentSamples),
+        runPrompt(context, item.prompt, validationSamples)
       ]);
       const result = promotionDecision({ metrics, holdout }, baseline, holdoutBaseline);
-      evaluated.push({ ...item, metrics, holdout, ...result });
+      evaluated.push({ ...item, focus, metrics, holdout, ...result });
     }
     const winner = evaluated.filter(item => item.eligible)
       .sort((a, b) => b.metrics.score - a.metrics.score || b.holdout.score - a.holdout.score)[0];
     const generation = state.generation + (winner ? 1 : 0);
     const champion = winner
-      ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score }
-      : { ...state.champion, score: baseline.score };
+      ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score, scorerVersion: SCORER_VERSION }
+      : { ...state.champion, score: baseline.score, scorerVersion: SCORER_VERSION };
     const pairedModelCandidates = evaluated.length === 2 && evaluated.every(item => item.source === "model");
     const strategyResult = pairedModelCandidates
       ? updateStrategyTrial(workingState, date, evaluated[0], evaluated[1])
@@ -378,10 +438,17 @@ export async function runEvolution(env, timestamp = Date.now()) {
         };
     const outcome = pairedModelCandidates ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
       : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
+    const audit = state.lastAudit?.championVersion === champion.version && state.lastAudit?.scorerVersion === SCORER_VERSION
+      ? state.lastAudit : { championVersion: champion.version, scorerVersion: SCORER_VERSION,
+          checkedAt: new Date().toISOString(), purpose: "report-only; excluded from optimization and promotion",
+          samples: auditCorpus, metrics: await runPrompt(context, champion.prompt, auditCorpus) };
     const run = {
-      id: crypto.randomUUID(), schemaVersion: 3, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
+      id: crypto.randomUUID(), schemaVersion: 4, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
       model: modelName, scorerVersion: SCORER_VERSION,
-      benchmarkIds: benchmark.map(item => item.id), validationSamples,
+      evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC }, datasetVersion: DATASET_VERSION,
+      calibration, usage: context.usage, audit,
+      strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: 42 },
+      benchmarkIds: developmentSamples.map(item => item.id), developmentSamples, validationSamples,
       baseline, holdoutBaseline, candidates: evaluated, candidateGeneration, outcome,
       accepted: Boolean(winner), selectedId: winner?.id ?? null,
       championVersion: champion.version, championScore: champion.score,
@@ -393,13 +460,13 @@ export async function runEvolution(env, timestamp = Date.now()) {
         : "所有候选未同时通过开发集与新文章验证；冠军保持不变"
     };
     const feedbackRecord = {
-      date, candidates: evaluated.map(item => ({
-        id: item.id, score: item.metrics.score,
-        missing: item.metrics.missing, forbidden: item.metrics.forbidden
+      date, baseline: baselineFeedback, candidates: evaluated.map(item => ({
+        id: item.id, hypothesis: item.hypothesis, improvement: Number((item.metrics.score - baseline.score).toFixed(1)),
+        development: developmentFeedback(item.metrics, developmentSamples)
       })), rejectedCandidates: candidateGeneration.results.map(item => ({ id: item.id, attempts: item.attempts, rejected: item.rejected.length }))
     };
     const next = {
-      ...state, schemaVersion: 3, generation, champion,
+      ...state, schemaVersion: 4, scorerVersion: SCORER_VERSION, generation, champion, lastAudit: audit,
       strategyGeneration: strategyResult.strategyGeneration, strategy: strategyResult.strategy,
       challenger: strategyResult.challenger,
       strategyHistory: strategyResult.trial ? [...state.strategyHistory, strategyResult.trial].slice(-30) : state.strategyHistory,
@@ -408,7 +475,7 @@ export async function runEvolution(env, timestamp = Date.now()) {
       seenCandidateKeys: [...seenKeys, ...evaluated.map(item => clean(item.prompt))],
       latestRun: run,
       history: [...state.history, {
-        date, generation, score: champion.score,
+        date, scorerVersion: SCORER_VERSION, generation, score: champion.score,
         holdoutScore: winner?.holdout.score ?? holdoutBaseline.score,
         accepted: Boolean(winner), focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "补位候选未晋级"),
         strategy: strategyResult.strategy.version
@@ -420,7 +487,9 @@ export async function runEvolution(env, timestamp = Date.now()) {
     return { skipped: false, state: next };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const run = { id: crypto.randomUUID(), schemaVersion: 3, date, status: "failed", startedAt, completedAt: new Date().toISOString(), error: message };
+    const run = { id: crypto.randomUUID(), schemaVersion: 4, scorerVersion: SCORER_VERSION, date, status: "failed", startedAt,
+      completedAt: new Date().toISOString(), evaluator: { model: context.model, version: EVALUATOR_VERSION },
+      calibration, usage: context.usage, error: message };
     const next = { ...state, latestRun: run, updatedAt: run.completedAt };
     await env.EVOLUTION.put(`${RUN_PREFIX}${date}`, JSON.stringify(run));
     await env.EVOLUTION.put(STATE_KEY, JSON.stringify(next));
@@ -429,40 +498,22 @@ export async function runEvolution(env, timestamp = Date.now()) {
   }
 }
 
-export async function rescoreLatest(env) {
-  const state = await getState(env);
-  const run = state.latestRun;
-  if (run?.schemaVersion === 3) throw new Error("V3 results include holdout validation and cannot be rescored without rerunning the experiment");
-  if (run?.status !== "completed" || run.accepted) throw new Error("Only a completed, non-promoted legacy run may be rescored");
-  const localDate = experimentDate(Date.parse(run.startedAt));
-  if (run.scorerVersion === SCORER_VERSION && run.date === localDate) return { skipped: true, state };
-  const baseline = run.scorerVersion === SCORER_VERSION ? run.baseline : rescoreMetrics(run.baseline);
-  const candidates = run.candidates.map(item => {
-    const metrics = run.scorerVersion === SCORER_VERSION ? item.metrics : rescoreMetrics(item.metrics);
-    const eligible = metrics.forbidden.length === 0 && metrics.coverage >= baseline.coverage && metrics.score >= baseline.score + 2;
-    return { ...item, metrics, eligible };
-  });
-  const winner = candidates.filter(item => item.eligible).sort((a, b) => b.metrics.score - a.metrics.score)[0];
-  const generation = state.generation + (winner ? 1 : 0);
-  const champion = winner ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score } : { ...state.champion, score: baseline.score };
-  const correctedRun = { ...run, date: localDate, scorerVersion: SCORER_VERSION, baseline, candidates,
-    accepted: Boolean(winner), selectedId: winner?.id ?? null, championVersion: champion.version, championScore: champion.score,
-    rescoredAt: new Date().toISOString(), reason: winner ? `${winner.id} 在旧版评分修正后晋级` : "旧版评分修正后仍无候选晋级" };
-  const history = state.history.map(item => item.date === run.date
-    ? { ...item, date: localDate, generation, score: champion.score, accepted: Boolean(winner) } : item);
-  const next = { ...state, generation, champion, latestRun: correctedRun, history, updatedAt: correctedRun.rescoredAt };
-  await env.EVOLUTION.put(`${RUN_PREFIX}${localDate}`, JSON.stringify(correctedRun));
-  await env.EVOLUTION.put(STATE_KEY, JSON.stringify(next));
-  return { skipped: false, state: next };
+export async function rescoreLatest() {
+  throw new Error("V4 requires fresh semantic evaluation; legacy outputs cannot be relabeled as V4");
 }
 
 export function publicState(state) {
   return {
-    schemaVersion: state.schemaVersion, generation: state.generation, champion: state.champion,
+    schemaVersion: state.schemaVersion, scorerVersion: SCORER_VERSION,
+    generation: state.generation, champion: state.champion, legacyBaseline: state.legacyBaseline || null,
     strategy: state.strategy, challenger: state.challenger, strategyHistory: state.strategyHistory,
     latestRun: state.latestRun, history: state.history, updatedAt: state.updatedAt,
-    benchmark: benchmark.map(({ id, title, article, anchors }) => ({ id, title, article, anchors: anchors.map(group => group[0]) })),
-    scoring: "开发集：事实覆盖 60% + 四段格式 20% + 长度精简度 20%，禁用断言扣分；候选需提升至少 2 分。新文章验证：综合分和事实覆盖均不得下降，且禁用断言为零。挑战生成策略需在最多 3 次配对试验中赢 2 次才晋级。",
-    holdoutPolicy: "每天按日期组合两篇新的参数化技术短文；候选与策略生成器均不接收当日验证文章，测试后完整公开。相同主题模板可能重复，因此仍需未来引入人工审校和独立真实文章。"
+    evaluator: { model: state.latestRun?.evaluator?.model || DEFAULT_JUDGE_MODEL, version: EVALUATOR_VERSION, rubric: RUBRIC },
+    dataset: { version: DATASET_VERSION, development: developmentCorpus.length, validation: validationCorpus.length,
+      audit: auditCorpus.length, reviewStatus: "author-curated; awaiting independent human review" },
+    benchmark: (state.latestRun?.developmentSamples || developmentCorpus).map(({ id, title, article, facts }) =>
+      ({ id, title, article, anchors: facts.map(fact => fact.text) })),
+    scoring: "固定语义评委核验原文证据，脚本按事实准确性40、信息完整性25、条件与范围20、表达10、格式5计算分数。任何矛盾或无依据断言将否决晋级并把单篇总分封顶49。80—450字是约束，不奖励越短越好。开发集需提升至少2分，隔离验证不得退步。策略需同焦点配对，最多3次试验中胜出2次。",
+    holdoutPolicy: "从独立的6篇人工编写（尚待独立人工审校）文章池每天轮换2篇；它们不是每天新采集的文章，三天后会重复。提案模型只收到开发集失败证据，不接收验证/审计内容。另3篇审计文章只报告冠军效果，不用于优化或晋级。"
   };
 }

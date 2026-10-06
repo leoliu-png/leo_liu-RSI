@@ -14,7 +14,7 @@ const today = new Intl.DateTimeFormat("sv-SE", {
 if (data.latestRun?.status !== "completed" || data.latestRun.date !== today) {
   throw new Error(`No completed experiment for ${today}; snapshot was not created`);
 }
-const target = new URL(`../snapshots/${today}.json`, import.meta.url);
+const target = new URL(`../snapshots/${today}${data.schemaVersion === 4 ? "-v4" : ""}.json`, import.meta.url);
 if (!hasSnapshotEvidence(data)) {
   let archived;
   try {

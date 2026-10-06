@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { benchmark } from "../src/benchmark.js";
 import { holdoutForDate } from "../src/holdout.js";
+import { developmentCorpus, validationCorpus, auditCorpus, calibrationCases, validationForDate } from "../src/corpus.js";
+import { judgmentFor } from "../test-support/judgment.js";
 import { hasSnapshotEvidence } from "../scripts/snapshot-evidence.mjs";
 import {
   STATE_KEY, challengerBeatsIncumbent, experimentDate, getState, initialState,
@@ -11,11 +13,12 @@ import {
 const promptA = "候选 A。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；输出前逐项核对每个数字的计量对象、适用范围、前提条件和原文证据，找不到直接依据就删除该断言，禁止臆造原文以外的信息，全文控制在 450 字以内。";
 const promptB = "候选 B。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；风险段区分已观察到的问题和未证实的可能性，术语段只解释文中实际定义的概念，并删除四段间重复事实，禁止编造，全文控制在 450 字以内。";
 
-function fakeEnvironment({ fail = false, holdoutFail = false, proposalPrompt } = {}) {
+function fakeEnvironment({ fail = false, holdoutFail = false, calibrationFail = false, proposalPrompt } = {}) {
   const values = new Map();
   let calls = 0;
   let proposalCalls = 0;
-  const samples = [...benchmark, ...[24, 25, 26, 27].flatMap(day => holdoutForDate(`2026-09-${day}`))];
+  const samples = [...developmentCorpus, ...validationCorpus, ...auditCorpus,
+    ...[24, 25, 26, 27].flatMap(day => validationForDate(`2026-09-${day}`))];
   const env = {
     EVOLUTION: {
       async get(key) { return values.has(key) ? JSON.parse(values.get(key)) : null; },
@@ -25,10 +28,19 @@ function fakeEnvironment({ fail = false, holdoutFail = false, proposalPrompt } =
       async run(_model, input) {
         calls++;
         if (fail) throw new Error("model unavailable");
+        if (input.messages[0].content.startsWith("rsi-evaluator-v4")) {
+          const payload = JSON.parse(input.messages[1].content);
+          const wrong = !calibrationFail && calibrationCases.some(item => item.expected === "reject" && item.summary === payload.summary) ||
+            payload.summary.includes("无条件错误断言");
+          return { response: judgmentFor({ sources: payload.source, facts: payload.importantFacts, constraints: payload.constraints },
+            payload.summary, wrong) };
+        }
         if (input.temperature === 0.65 || input.temperature === 0.7) {
           const proposalInput = JSON.stringify(input.messages);
           assert.ok(samples.filter(item => item.id.includes("2026-")).every(item => !proposalInput.includes(item.article)),
             "the proposal model must not see holdout articles");
+          assert.ok([...validationCorpus, ...auditCorpus].every(item => !proposalInput.includes(item.article)),
+            "validation and audit contents must not enter candidate generation");
         }
         if (input.temperature === 0.65) return { response: JSON.stringify({
           hypothesis: "先核对关键条件比先压缩长度更稳健",
@@ -46,7 +58,7 @@ function fakeEnvironment({ fail = false, holdoutFail = false, proposalPrompt } =
         assert.ok(sample, "inference must use a known test article");
         const prompt = input.messages[0].content;
         if (prompt.includes("候选 A")) {
-          const wrong = holdoutFail && sample.id.includes("2026-") ? ` ${sample.forbidden[0]}` : "";
+          const wrong = holdoutFail && validationCorpus.some(item => item.article === sample.article) ? " 无条件错误断言。" : "";
           return { response: `结论：概述${sample.title}。\n要点：${sample.article}${wrong}\n风险：仅按原文所述。\n术语：关键名称沿用原文。` };
         }
         return { response: sample.article };
@@ -91,13 +103,33 @@ test("paired strategies produce candidates; development and unseen passages gate
   assert.equal(first.state.latestRun.holdoutBaseline.outputs.length, 2);
   assert.equal(first.state.latestRun.candidates[0].holdout.outputs.length, 2);
   assert.equal(first.state.latestRun.strategyTrial.challengerWon, false);
+  assert.equal(first.state.latestRun.candidates[0].focus, first.state.latestRun.candidates[1].focus);
   assert.equal(hasSnapshotEvidence(first.state), true);
   assert.equal(first.state.challenger.trials.length, 1);
-  assert.ok(mock.values.has("rsi:v3:run:2026-09-24"));
+  assert.ok(mock.values.has("rsi:v4:run:2026-09-24"));
   const callsAfterFirst = mock.calls();
   const second = await runEvolution(mock.env, Date.parse("2026-09-24T02:00:00Z"));
   assert.equal(second.skipped, true);
   assert.equal(mock.calls(), callsAfterFirst);
+});
+
+test("calibration failure stops proposals and never promotes a champion", async () => {
+  const mock = fakeEnvironment({ calibrationFail: true });
+  await assert.rejects(runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z")), /calibration rejected/);
+  assert.equal(mock.proposalCalls(), 0);
+  const state = await mock.env.EVOLUTION.get(STATE_KEY);
+  assert.equal(state.champion.version, "v0");
+  assert.equal(state.latestRun.calibration.passed, false);
+});
+
+test("V4 snapshots require calibration and semantic evidence", async () => {
+  const mock = fakeEnvironment();
+  const { state } = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(hasSnapshotEvidence(state), true);
+  assert.equal(hasSnapshotEvidence({ ...state, latestRun: { ...state.latestRun, calibration: null } }), false);
+  const altered = structuredClone(state);
+  delete altered.latestRun.baseline.outputs[0].judgment;
+  assert.equal(hasSnapshotEvidence(altered), false);
 });
 
 test("holdout regression rolls back a development-set improvement", async () => {
@@ -106,7 +138,7 @@ test("holdout regression rolls back a development-set improvement", async () => 
   assert.equal(result.state.generation, 0);
   assert.equal(result.state.champion.version, "v0");
   assert.equal(result.state.latestRun.accepted, false);
-  assert.match(result.state.latestRun.candidates[0].reason, /新验证文章/);
+  assert.match(result.state.latestRun.candidates[0].reason, /隔离验证文章/);
   assert.ok(result.state.latestRun.candidates[0].metrics.score > result.state.latestRun.baseline.score);
 });
 
@@ -249,7 +281,9 @@ test("legacy v2 champion and history migrate without deleting old KV data", asyn
     latestRun: null, history: [{ date: "2026-09-23", generation: 2, score: 91 }], updatedAt: "2026-09-23T00:00:00Z" };
   mock.values.set("rsi:v2:state", JSON.stringify(legacy));
   const state = await getState(mock.env);
-  assert.equal(state.schemaVersion, 3);
+  assert.equal(state.schemaVersion, 4);
+  assert.equal(state.champion.score, null);
+  assert.equal(state.legacyBaseline.score, 91);
   assert.equal(state.champion.version, "v2");
   assert.equal(state.history.length, 1);
   assert.equal(mock.values.has("rsi:v2:state"), true);

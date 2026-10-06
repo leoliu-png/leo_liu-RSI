@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Prompt RSI Lab：双层优化技术摘要提示词与候选生成策略，并用每日新文章验证晋级。">
+  <meta name="description" content="Prompt RSI Lab：双层优化技术摘要提示词与候选生成策略，并用每日隔离文章验证晋级。">
   <title>Prompt RSI Lab · 提示词自进化实验室</title>
   <style>
     :root { color-scheme: dark; --bg:#080908; --panel:#141612; --line:#30342d; --text:#f1f4e9; --muted:#abb1a4; --acid:#d9ff43; --red:#ff776b; --mono:ui-monospace,Consolas,"Liberation Mono",monospace; --sans:Inter,"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif; }
@@ -151,32 +151,32 @@
     <section class="hero">
       <div class="hero-main">
         <div><span class="eyebrow">Two-layer Recursive Improvement / 技术摘要任务</span><h1>让改进方法<span>也参与进化。</span></h1></div>
-        <p class="lede">第一层改进摘要提示词；第二层比较两种“如何生成候选”的策略。新版本必须通过公开开发集和当日新文章验证，才能取代冠军。</p>
+        <p class="lede">第一层改进摘要提示词；第二层比较两种“如何生成候选”的策略。新版本必须通过公开开发集和当日隔离验证文章验证，才能取代冠军。</p>
       </div>
       <div class="hero-stats">
         <div class="stat"><span class="stat-label">当前冠军</span><strong id="version">v0</strong><small>提示词版本</small></div>
-        <div class="stat"><span class="stat-label">开发集综合分</span><strong id="score">—</strong><small>新文章另行验证 / 满分 100</small></div>
+        <div class="stat"><span class="stat-label">开发集综合分</span><strong id="score">—</strong><small>隔离文章另行验证 / 满分 100</small></div>
         <div class="stat"><span class="stat-label">最近实验</span><strong id="decision" style="font-size:clamp(24px,3vw,40px)">待运行</strong><small id="date">每天 09:00 CST</small></div>
       </div>
     </section>
 
-    <figure class="visual"><img src="/assets/prompt-evolution-lab.png" alt="两个候选提示词经过多道评测，汇聚为冠军提示词的实验室概念图" width="1536" height="1024"><figcaption><strong>策略竞争 → Prompt 候选 → 新文章验证</strong><span>概念图；实际评分和输出见下方实验记录</span></figcaption></figure>
+    <figure class="visual"><img src="/assets/prompt-evolution-lab.png" alt="两个候选提示词经过多道评测，汇聚为冠军提示词的实验室概念图" width="1536" height="1024"><figcaption><strong>策略竞争 → Prompt 候选 → 隔离文章验证</strong><span>概念图；实际评分和输出见下方实验记录</span></figcaption></figure>
 
     <section class="panel section intro" id="project">
-      <div class="intro-copy"><span class="eyebrow">PROJECT / 项目介绍</span><h2>双层进化，<br>先证明再晋级。</h2><p>任务保持不变：把技术文章写成中文四段式摘要。每天由当前策略和挑战策略各生成一个候选 Prompt，冠军与候选处理相同的开发文章和当日新验证文章。</p><p>候选须在开发集提升至少 2 分，且在新文章上不退步；挑战策略须在最多三次配对实验中胜出两次才晋级。失败时保留原冠军和原策略，同时保存完整证据。</p></div>
+      <div class="intro-copy"><span class="eyebrow">PROJECT / 项目介绍</span><h2>双层进化，<br>先证明再晋级。</h2><p>任务保持不变：把技术文章写成中文四段式摘要。每天由当前策略和挑战策略各生成一个候选 Prompt，冠军与候选处理相同的开发文章和当日隔离验证文章。</p><p>候选须在开发集提升至少 2 分，且在隔离文章上不退步；挑战策略须在最多三次配对实验中胜出两次才晋级。失败时保留原冠军和原策略，同时保存完整证据。</p></div>
       <div class="goals">
         <div class="goal"><b>01</b><div><h3>保留关键事实</h3><p>摘要覆盖文章中的实体、条件、数字与限制。</p></div></div>
         <div class="goal"><b>02</b><div><h3>稳定输出结构</h3><p>生成“结论、要点、风险、术语”四段内容。</p></div></div>
         <div class="goal"><b>03</b><div><h3>控制长度</h3><p>目标为 80 至 450 字，减少过短遗漏与过长冗余。</p></div></div>
-        <div class="goal"><b>04</b><div><h3>防止虚假进步</h3><p>开发集、新文章双重验证；失败回退并保留完整证据。</p></div></div>
+        <div class="goal"><b>04</b><div><h3>防止虚假进步</h3><p>开发集、隔离文章双重验证；失败回退并保留完整证据。</p></div></div>
       </div>
     </section>
 
     <section class="panel section" id="cycle"><div class="section-head"><h2>每日自进化流程</h2><span>CLOUDFLARE CRON · 01:00 UTC / 09:00 CST</span></div><div class="flow">
       <div class="step"><b>01 / 诊断</b><h3>分析历次失败</h3><p>只向生成器提供开发集失分，分析事实遗漏和拒绝原因。</p></div>
       <div class="step"><b>02 / 双层变异</b><h3>策略各出一案</h3><p>当前策略和挑战策略各提出一个完整候选 Prompt。</p></div>
-      <div class="step"><b>03 / 执行</b><h3>生成真实摘要</h3><p>冠军和候选处理同一批开发文章与当日新文章。</p></div>
-      <div class="step"><b>04 / 验证</b><h3>核对新文章</h3><p>先看开发集改善，再检查新文章是否退步或出错。</p></div>
+      <div class="step"><b>03 / 执行</b><h3>生成真实摘要</h3><p>冠军和候选处理同一批开发文章与当日隔离验证文章。</p></div>
+      <div class="step"><b>04 / 验证</b><h3>核对隔离文章</h3><p>先看开发集改善，再检查隔离文章是否退步或出错。</p></div>
       <div class="step"><b>05 / 选择</b><h3>独立晋级或回退</h3><p>Prompt 按双重验证晋级；策略需多日胜出才晋级。</p></div>
     </div></section>
 
@@ -188,15 +188,17 @@
     <section class="panel section" id="strategy"><div class="section-head"><h2>第二层：候选生成策略</h2><span>挑战策略须在最多 3 次试验中赢 2 次</span></div><div class="workspace">
       <div class="strategy-copy"><h3 id="strategy-version">当前策略 · s0</h3><p id="strategy-hypothesis">读取策略中…</p><p class="strategy-instruction" id="strategy-instruction">—</p></div>
       <div class="strategy-trial"><h3>挑战策略与晋级证据</h3><p id="strategy-challenger">等待首轮新版实验。</p><p id="strategy-decision">策略不会因单日运气直接晋级。</p></div>
-    </div><div class="table-wrap"><table><thead><tr><th>日期</th><th>当前策略</th><th>开发集 当前/挑战</th><th>新文章 当前/挑战</th><th>挑战胜出</th></tr></thead><tbody id="strategy-history"><tr><td colspan="5">新版实验完成后生成记录。</td></tr></tbody></table></div></section>
+    </div><div class="table-wrap"><table><thead><tr><th>日期</th><th>当前策略</th><th>开发集 当前/挑战</th><th>隔离文章 当前/挑战</th><th>挑战胜出</th></tr></thead><tbody id="strategy-history"><tr><td colspan="5">新版实验完成后生成记录。</td></tr></tbody></table></div></section>
 
-    <section class="panel section"><div class="section-head"><h2>开发集评分趋势</h2><span>最近 30 次实验</span></div><div class="metrics"><div class="chart-wrap"><svg id="chart" viewBox="0 0 700 255" role="img" aria-label="真实实验开发集综合分趋势图"></svg><p class="note" id="chart-note">等待首轮实测数据。</p></div><div class="metric-explain"><dl><dt>事实关键词覆盖</dt><dd>60%</dd><dt>四段格式</dt><dd>20%</dd><dt>80–450 字内精简度</dt><dd>20%</dd><dt>禁用断言</dt><dd>每项 -15</dd></dl><p class="note">评分是可复查的代理指标，不能替代语义事实核查。新文章分数另列在下方，不混入开发集趋势。</p><p class="note" id="reason">最近结果：等待实验。</p></div></div></section>
+    <section class="panel section"><div class="section-head"><h2>开发集评分趋势</h2><span>只绘制 V4 分数 / 每日文章轮换，非单调进步曲线</span></div><div class="metrics"><div class="chart-wrap"><svg id="chart" viewBox="0 0 700 255" role="img" aria-label="真实实验开发集综合分趋势图"></svg><p class="note" id="chart-note">等待首轮实测数据。</p></div><div class="metric-explain"><dl><dt>事实准确性</dt><dd>40%</dd><dt>信息完整性</dt><dd>25%</dd><dt>条件与适用范围</dt><dd>20%</dd><dt>表达清晰 / 不冗余</dt><dd>10%</dd><dt>四段格式</dt><dd>5%</dd></dl><p class="note">模型逐句核查证据，脚本计算分数。矛盾或无依据断言否决晋级，单篇封顶 49 分；80–450 字仅作约束。评委仍可能犯错，不能替代人工审校。</p><p class="note" id="reason">最近结果：等待实验。</p></div></div></section>
 
-    <section class="panel section"><div class="section-head"><h2>每日实验账本</h2><span>真实执行记录</span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>冠军版本</th><th>开发集</th><th>新文章</th><th>策略版本</th><th>结果</th><th>改进焦点</th></tr></thead><tbody id="history"><tr><td colspan="7">首次实验完成后生成记录。</td></tr></tbody></table></div></section>
+    <section class="panel section"><div class="section-head"><h2>每日实验账本</h2><span>真实执行记录</span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>冠军版本</th><th>开发集</th><th>隔离文章</th><th>策略版本</th><th>结果</th><th>改进焦点</th></tr></thead><tbody id="history"><tr><td colspan="7">首次实验完成后生成记录。</td></tr></tbody></table></div></section>
 
-    <section class="panel section" id="benchmark"><div class="section-head"><h2>公开开发集文章</h2><span>3 篇原创技术短文 / 固定事实标签</span></div><div id="samples" class="samples"></div></section>
+    <section class="panel section" id="evaluator"><div class="section-head"><h2>V4 语义评委与校准</h2><span id="evaluator-status">等待真实校准</span></div><p class="note" id="evaluator-info"></p><p class="note" id="scoring-policy"></p><p class="note" id="legacy-score"></p><div class="table-wrap"><table><thead><tr><th>校验样例</th><th>预期</th><th>实测分</th><th>是否检出错误</th><th>校验</th></tr></thead><tbody id="calibration-table"></tbody></table></div><details><summary>展开校准摘要与原文证据</summary><div id="calibration-evidence"></div></details><h3>同批文章的分项对照</h3><div class="table-wrap"><table><thead><tr><th>版本 / 数据</th><th>准确性 /40</th><th>完整性 /25</th><th>条件 /20</th><th>表达 /10</th><th>格式 /5</th><th>总分</th><th>硬错误</th></tr></thead><tbody id="dimension-table"></tbody></table></div></section>
+    <section class="panel section" id="audit"><div class="section-head"><h2>独立审计：只报告，不参与晋级</h2><span id="audit-score">待测</span></div><p class="note">三篇固定审计文章不提供给候选生成器，也不参与策略比较；随冠军版本变化重新评测。文章由项目编写，尚待独立人工审校，并非永久全新盲测集。</p><div id="audit-outputs" class="samples"></div></section>
+    <section class="panel section" id="benchmark"><div class="section-head"><h2>公开开发集文章</h2><span>9 篇开发文章池 / 每日轮换 3 篇</span></div><div id="samples" class="samples"></div></section>
 
-    <section class="panel section" id="validation"><div class="section-head"><h2>每日新文章验证</h2><span id="validation-date">待运行</span></div><p class="validation-intro" id="validation-policy">当日文章不提供给候选或策略生成器；测试完成后公开逐篇证据。</p><div class="table-wrap"><table><thead><tr><th>版本</th><th>开发集分</th><th>新文章分</th><th>新文章事实覆盖</th><th>晋级结果</th></tr></thead><tbody id="validation-table"><tr><td colspan="5">新版实验完成后展示。</td></tr></tbody></table></div><div id="validation-samples" class="samples"></div></section>
+    <section class="panel section" id="validation"><div class="section-head"><h2>每日隔离文章验证</h2><span id="validation-date">待运行</span></div><p class="validation-intro" id="validation-policy">当日文章不提供给候选或策略生成器；测试完成后公开逐篇证据。</p><div class="table-wrap"><table><thead><tr><th>版本</th><th>开发集分</th><th>隔离文章分</th><th>隔离文章事实覆盖</th><th>晋级结果</th></tr></thead><tbody id="validation-table"><tr><td colspan="5">新版实验完成后展示。</td></tr></tbody></table></div><div id="validation-samples" class="samples"></div></section>
 
     <section class="panel section"><div class="section-head"><h2>最近一次摘要输出</h2><span>逐篇保留原文生成结果</span></div><div id="outputs" class="result"><p class="note">首次实验完成后展示冠军版本生成的摘要。</p></div></section>
     <div id="notice" class="notice">Cloudflare 每天自动运行一次；旧实验继续保留，新版双层验证将在下一轮完成后展示。GitHub 保存代码与每日快照。</div>
@@ -207,6 +209,7 @@
     const make = (tag, text, className) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; };
     const number = value => typeof value === "number" ? value.toFixed(1) : "—";
     function drawChart(history) {
+      history = history.filter(item => item.scorerVersion === 4);
       const svg = $("#chart"); svg.replaceChildren();
       if (!history.length) return;
       const values = history.map(item => Number(item.score));
@@ -229,8 +232,45 @@
       });
       $("#chart-note").textContent = `开发集综合分：${history.length} 次真实实验。每天重新评测当前冠军。`;
     }
+    function semanticEvidence(output) {
+      const details=make("details");details.append(make("summary","逐句判断、覆盖缺失与原文依据"));
+      if(!output.judgment){details.append(make("p","旧版关键词评分，没有语义核验证据。","note"));return details;}
+      details.append(make("p",`字数 ${output.characters} · 长度合规 ${output.lengthValid?"是":"否"} · 可晋级 ${output.eligible?"是":"否"} · 原始加权分 ${number(output.rawScore)}`,"note"));
+      output.judgment.units.forEach(row=>{
+        details.append(make("p",`${row.id} · ${row.verdict}：${row.reason}`),
+          make("p",`依据：${row.sourceIds.map(id=>output.sources?.find(source=>source.id===id)?.text||id).join(" / ")||"原文无直接依据"}`,"note"));
+      });
+      [...output.judgment.facts,...output.judgment.constraints].forEach(row=>{
+        details.append(make("p",`${row.id} · ${row.status}：${row.reason} · 摘要引文：${row.quote||"未表达"}`,"note"));
+      });
+      return details;
+    }
+    function renderEvaluation(state) {
+      const run=state.latestRun, calibration=run?.calibration;
+      $("#evaluator-status").textContent=calibration ? `${calibration.passed?"通过":"未通过"} · ${calibration.results.filter(item=>item.passed).length}/${calibration.results.length}` : "尚无真实校准";
+      $("#evaluator-info").textContent=`生成模型：Qwen3 30B A3B FP8。评委：${state.evaluator?.model||"待配置"} / ${state.evaluator?.version||"V4"}。数据池 9 开发 + 6 验证 + 3 审计；尚待独立人工审校。当天 AI 调用：${run?.usage?.calls??"—"} / 上限 64。`;
+      $("#scoring-policy").textContent=state.scoring||"";
+      $("#legacy-score").textContent=state.legacyBaseline ? `旧评分存档：${state.legacyBaseline.championVersion} 为 ${state.legacyBaseline.score} 分（V3，不能与 V4 比较）。新冠军分数来自重新实测。` : "旧评分与 V4 分开保留。";
+      const tbody=$("#calibration-table"), evidence=$("#calibration-evidence");tbody.replaceChildren();evidence.replaceChildren();
+      (calibration?.results||[]).forEach(item=>{
+        const row=make("tr");[item.id,item.expected==="pass"?"正确摘要应通过":"错误摘要应拒绝",number(item.metrics.score),item.metrics.hardFailure?"是":"否",item.passed?"通过":"失败"].forEach(value=>row.append(make("td",value)));tbody.append(row);
+        const card=make("article");card.append(make("h4",item.id),make("p",item.sample.article),make("pre",item.summary),semanticEvidence({...item.metrics,sources:item.sample.sources}));evidence.append(card);
+      });
+      const dims=$("#dimension-table");dims.replaceChildren();
+      const metrics=run?.baseline ? [{label:"冠军",development:run.baseline,validation:run.holdoutBaseline},...run.candidates.map(item=>({label:item.id,development:item.metrics,validation:item.holdout}))] : [];
+      metrics.forEach(item=>["development","validation"].forEach(set=>{
+        const data=item[set];if(!data?.dimensions)return;
+        const row=make("tr");[`${item.label} / ${set==="development"?"开发":"验证"}`,...["accuracy","completeness","constraints","clarity","format"].map(key=>number(data.dimensions[key])),number(data.score),data.errors.length].forEach(value=>row.append(make("td",value)));dims.append(row);
+      }));
+      $("#audit-score").textContent=run?.audit ? `${run.audit.championVersion} · ${number(run.audit.metrics.score)} 分` : "待测";
+      const audit=$("#audit-outputs");audit.replaceChildren();
+      run?.audit?.metrics.outputs.forEach(output=>{
+        const card=make("article",null,"sample");card.append(make("h3",`${output.title} · ${number(output.score)} 分`),make("p",run.audit.samples.find(item=>item.id===output.sampleId)?.article),make("pre",output.summary),semanticEvidence(output));audit.append(card);
+      });
+    }
     function render(state) {
       const run=state.latestRun, champion=state.champion;
+      renderEvaluation(state);
       const limited=run?.status === "completed" && ["partial_candidates","generation_exhausted"].includes(run.outcome);
       const assisted=run?.status === "completed" && run.outcome === "fallback_candidates";
       $("#online-status").textContent = limited ? "LIMITED / 候选去重受限" : assisted ? "GUARDED / 规则补位完成" : run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
@@ -265,9 +305,10 @@
         const head=make("div",null,"candidate-head");
         head.append(make("strong",`${item.id} · ${item.hypothesis}`),make("span",`${number(item.metrics.score)} 分 · ${item.eligible ? "达标" : "未达标"}`,`badge ${item.eligible ? "good" : "bad"}`));
         card.append(head,make("p",item.reason),make("p",`事实覆盖 ${Math.round(item.metrics.coverage*100)}% · 格式 ${Math.round(item.metrics.format*100)}% · 平均 ${item.metrics.characters} 字`));
-        if(item.holdout) card.append(make("p",`${item.source === "guardrail_fallback" ? "预定义核验规则补位（不计策略胜负）" : `生成策略 ${item.strategyVersion}`} · 新文章 ${number(item.holdout.score)} 分，事实覆盖 ${Math.round(item.holdout.coverage*100)}%`));
+        if(item.holdout) card.append(make("p",`${item.source === "guardrail_fallback" ? "预定义核验规则补位（不计策略胜负）" : `生成策略 ${item.strategyVersion}`} · 隔离文章 ${number(item.holdout.score)} 分，事实覆盖 ${Math.round(item.holdout.coverage*100)}%`));
         const details=make("details"); details.append(make("summary","查看完整候选 Prompt"),make("pre",item.prompt)); card.append(details); candidates.append(card);
         if(item.metrics.outputs?.length){const evidence=make("details");evidence.append(make("summary","查看开发集逐篇摘要"));item.metrics.outputs.forEach(output=>{evidence.append(make("h4",`${output.title} · ${output.score} 分`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));});card.append(evidence);}
+        item.metrics.outputs?.forEach(output=>card.append(semanticEvidence(output)));
       });
       else candidates.append(make("p",run?.outcome === "generation_exhausted" ? "两条候选均与冠军、历史候选或彼此重复，重试后仍无不同 Prompt；今天没有候选晋级。" : "首次实验完成后展示真实候选 Prompt 和分数。","note"));
       const rejected=run?.candidateGeneration?.results?.flatMap(item=>item.rejected.map(entry=>({...entry,id:item.id}))) || [];
@@ -276,7 +317,7 @@
       const tbody=$("#history"); tbody.replaceChildren();
       if (state.history?.length) [...state.history].reverse().forEach(item=>{
         const row=make("tr");
-        [item.date,`v${item.generation}`,number(item.score),number(item.holdoutScore),item.strategy || "旧版",item.accepted?"候选晋级":"保留冠军",item.focus].forEach(value=>row.append(make("td",value)));
+        [item.date,`v${item.generation} / 评分V${item.scorerVersion || 3}`,number(item.score),number(item.holdoutScore),item.strategy || "旧版",item.accepted?"候选晋级":"保留冠军",item.focus].forEach(value=>row.append(make("td",value)));
         tbody.append(row);
       }); else { const row=make("tr"), cell=make("td","首次实验完成后生成记录。"); cell.colSpan=7; row.append(cell); tbody.append(row); }
       const samples=$("#samples"); samples.replaceChildren();
@@ -291,11 +332,11 @@
       const validationSamples=$("#validation-samples");validationSamples.replaceChildren();
       (run?.validationSamples || []).forEach(item=>{
         const card=make("article",null,"sample validation-sample");
-        card.append(make("h3",item.title),make("p",item.article),make("small",`核对标签：${item.anchors.map(group=>group[0]).join(" / ")}`));
+        card.append(make("h3",item.title),make("p",item.article),make("small",`核对标签：${(item.facts || []).map(fact=>fact.text).join(" / ")}`));
         [{label:"当天冠军",data:run.holdoutBaseline},...run.candidates.map(candidate=>({label:candidate.id,data:candidate.holdout}))].forEach(version=>{
           const output=version.data?.outputs?.find(result=>result.sampleId===item.id);
           if(!output)return;
-          const details=make("details");details.append(make("summary",`${version.label} · ${output.score} 分 · 查看摘要`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));card.append(details);
+          const details=make("details");details.append(make("summary",`${version.label} · ${output.score} 分 · 查看摘要`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));details.append(semanticEvidence(output));card.append(details);
         });
         validationSamples.append(card);
       });
@@ -303,16 +344,16 @@
       const current=run?.accepted ? run.candidates.find(item=>item.id===run.selectedId)?.metrics : run?.baseline;
       if (current?.outputs?.length) {
         const grid=make("div",null,"result-grid");
-        current.outputs.forEach(item=>{const card=make("article");card.append(make("h3",`${item.title} · ${item.score} 分`),make("pre",item.summary),make("p",`遗漏：${item.missing.join("、") || "无"}；禁用断言：${item.forbidden.join("、") || "无"}`,"note"));grid.append(card);});
+        current.outputs.forEach(item=>{const card=make("article");card.append(make("h3",`${item.title} · ${item.score} 分`),make("pre",item.summary),make("p",`遗漏：${item.missing.join("、") || "无"}；禁用断言：${item.forbidden.join("、") || "无"}`,"note"));card.append(semanticEvidence(item));grid.append(card);});
         outputs.append(grid);
       } else outputs.append(make("p","首次实验完成后展示冠军版本生成的摘要。","note"));
       const notice=$("#notice");
       if(run?.status==="failed") { notice.classList.add("error"); notice.textContent=`最近实验失败：${run.error}。当前冠军没有被替换；下一次定时运行将重试。`; }
-      else if(limited) notice.textContent="模型给出了重复候选，系统已拦截并有限重试；未凑齐两条不同候选时不进行策略比较。冠军仅在通过新文章验证时晋级，重复本身不会造成整日实验失败。";
-      else if(assisted) notice.textContent="模型反复提出重复或改动过小的候选时，系统用预定义的实质性核验规则补位并完成评测；补位结果不会被冒充为模型策略胜利。冠军仍须通过开发集和新文章验证才能晋级。";
-      else notice.textContent=run?.schemaVersion===3
-        ? "Cloudflare 每天自动运行双层实验；策略比较、提示词晋级和新文章验证证据均保留在记录中。GitHub 保存每日快照。"
-        : "旧版实验已保留；新版双层策略和新文章验证将在下一轮实验后展示。";
+      else if(limited) notice.textContent="模型给出了重复候选，系统已拦截并有限重试；未凑齐两条不同候选时不进行策略比较。冠军仅在通过隔离文章验证时晋级，重复本身不会造成整日实验失败。";
+      else if(assisted) notice.textContent="模型反复提出重复或改动过小的候选时，系统用预定义的实质性核验规则补位并完成评测；补位结果不会被冒充为模型策略胜利。冠军仍须通过开发集和隔离文章验证才能晋级。";
+      else notice.textContent=run?.schemaVersion===4
+        ? "Cloudflare 每天自动运行双层实验；策略比较、提示词晋级和隔离文章验证证据均保留在记录中。GitHub 保存每日快照。"
+        : "V3 历史分数已保留；V4 将先重新评测冠军，不把旧评分直接当作新基线。";
     }
     fetch("/api/evolution",{cache:"no-store"}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}).then(render).catch(error=>{
       $("#online-status").textContent="OFFLINE / 数据读取失败";

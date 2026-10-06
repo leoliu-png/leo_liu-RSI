@@ -24,7 +24,7 @@ export default {
     try {
       if (path === "/api/evolution" && request.method === "GET") return json(publicState(await getState(env)));
       if (path === "/api/health" && request.method === "GET") {
-        return json({ ok: true, version: 3, now: new Date().toISOString() });
+        return json({ ok: true, version: 4, now: new Date().toISOString() });
       }
       if (path === "/api/admin/run" && request.method === "POST") {
         const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
@@ -35,8 +35,7 @@ export default {
       if (path === "/api/admin/rescore" && request.method === "POST") {
         const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
         if (!await tokenMatches(provided, env.RUN_TOKEN)) return json({ error: "Unauthorized" }, 401);
-        const result = await rescoreLatest(env);
-        return json({ skipped: result.skipped, state: publicState(result.state) });
+        return json({ error: "V4 requires a fresh experiment; legacy keyword scores cannot be converted into semantic evidence" }, 409);
       }
       if (path.startsWith("/api/")) return json({ error: "Not found" }, 404);
       return env.ASSETS.fetch(request);

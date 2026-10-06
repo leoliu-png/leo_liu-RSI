@@ -16,6 +16,7 @@
     }
   ],
   "ai": { "binding": "AI" },
+  "vars": { "JUDGE_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
   "triggers": {
     "crons": ["0 1 * * *"]
   },
