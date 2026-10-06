@@ -6,7 +6,7 @@ import { developmentCorpus, validationCorpus, auditCorpus, calibrationCases, val
 import { judgmentFor } from "../test-support/judgment.js";
 import { hasSnapshotEvidence } from "../scripts/snapshot-evidence.mjs";
 import {
-  STATE_KEY, RUN_PREFIX, challengerBeatsIncumbent, experimentDate, getState, initialState,
+  STATE_KEY, RUN_PREFIX, challengerBeatsIncumbent, experimentDate, getState, initialState, publicState,
   promotionDecision, rescoreMetrics, runEvolution as runRealEvolution, scoreSummary, updateStrategyTrial
 } from "../src/evolution.js";
 const runEvolution = (env, timestamp) => runRealEvolution(env, timestamp, env.AI);
@@ -128,6 +128,10 @@ test("V4 snapshots require calibration and semantic evidence", async () => {
   const { state } = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
   assert.equal(hasSnapshotEvidence(state), true);
   assert.equal(hasSnapshotEvidence({ ...state, latestRun: { ...state.latestRun, calibration: null } }), false);
+  const publicData = publicState(state);
+  assert.equal(hasSnapshotEvidence(publicData), true);
+  publicData.latestRun.calibration.model = "a-different-judge";
+  assert.equal(hasSnapshotEvidence(publicData), false);
   const altered = structuredClone(state);
   delete altered.latestRun.baseline.outputs[0].judgment;
   assert.equal(hasSnapshotEvidence(altered), false);

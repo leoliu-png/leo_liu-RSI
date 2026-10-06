@@ -492,6 +492,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient = cr
     await env.EVOLUTION.put(STATE_KEY, JSON.stringify(next));
     return { skipped: false, state: next };
   } catch (error) {
+    await context.cancel();
     const message = redactError(error instanceof Error ? error.message : String(error), env.OPENROUTER_API_KEY);
     const run = { id: crypto.randomUUID(), schemaVersion: 4, scorerVersion: SCORER_VERSION, date, status: "failed", startedAt,
       completedAt: new Date().toISOString(), model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", evaluator: { model: context.model, version: EVALUATOR_VERSION },

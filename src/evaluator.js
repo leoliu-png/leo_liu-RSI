@@ -27,16 +27,28 @@ const JUDGE_SCHEMA = itemSchema({
 
 export function createEvaluationContext(ai, model = DEFAULT_JUDGE_MODEL, maxCalls = 64) {
   const usage = { calls: 0, byModel: {}, judgeCacheHits: 0, inputTokens: 0, outputTokens: 0, transport: ai.stats || null };
+  const pending = new Set();
+  let canceled = false;
   return {
     model, cache: new Map(), usage,
+    async cancel() {
+      canceled = true;
+      ai.cancel?.();
+      await Promise.allSettled([...pending]);
+    },
     ai: { async run(name, input) {
+      if (canceled) throw Object.assign(new Error("Experiment canceled after a failure"), { providerFailure: true });
       if (usage.calls >= maxCalls) throw new Error(`AI call budget exhausted (${maxCalls})`);
       usage.calls++;
       usage.byModel[name] = (usage.byModel[name] || 0) + 1;
-      const response = await ai.run(name, input);
-      usage.inputTokens += response?.usage?.prompt_tokens || response?.usage?.input_tokens || 0;
-      usage.outputTokens += response?.usage?.completion_tokens || response?.usage?.output_tokens || 0;
-      return response;
+      const call = (async () => {
+        const response = await ai.run(name, input);
+        usage.inputTokens += response?.usage?.prompt_tokens || response?.usage?.input_tokens || 0;
+        usage.outputTokens += response?.usage?.completion_tokens || response?.usage?.output_tokens || 0;
+        return response;
+      })();
+      pending.add(call);
+      try { return await call; } finally { pending.delete(call); }
     } }
   };
 }
@@ -161,7 +173,7 @@ export async function judgeSummary(context, sample, summary) {
         evaluator: { model: context.model, version: EVALUATOR_VERSION, attempts: attempt } };
       context.cache.set(key, result);
       return structuredClone(result);
-    } catch (error) { lastError = error; }
+    } catch (error) { lastError = error; if (error.providerFailure) break; }
   }
   throw new Error(`Semantic evaluation failed for ${sample.id}: ${lastError?.message}`);
 }
@@ -169,7 +181,8 @@ export async function judgeSummary(context, sample, summary) {
 export async function calibrateEvaluator(context, kv, force = false) {
   const key = `rsi:v4:calibration:${EVALUATOR_VERSION}:${DATASET_VERSION}:${context.model}`;
   const cached = force ? null : await kv.get(key, "json");
-  if (cached?.passed && Date.now() - Date.parse(cached.checkedAt) < 86400000) return { ...cached, cached: true };
+  if (cached?.passed && cached.model === context.model && cached.version === EVALUATOR_VERSION &&
+      cached.datasetVersion === DATASET_VERSION && Date.now() - Date.parse(cached.checkedAt) < 86400000) return { ...cached, cached: true };
   const results = [];
   for (let start = 0; start < calibrationCases.length; start += 4) {
     const batch = await Promise.all(calibrationCases.slice(start, start + 4).map(async item => {

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { MODEL_NAME, OPENROUTER_BASE_URL } from "../src/model.js";
 import { createModelClient } from "../src/openrouter.js";
+import { createEvaluationContext, judgeSummary } from "../src/evaluator.js";
+import { developmentCorpus } from "../src/corpus.js";
 
 const env = { OPENROUTER_API_KEY: "test-private-token", MODEL_NAME, JUDGE_MODEL: MODEL_NAME, OPENROUTER_BASE_URL };
 const input = { messages: [{ role: "user", content: "test" }], temperature: 0, max_tokens: 300, seed: 42 };
@@ -59,4 +61,29 @@ test("empty, truncated and substituted model outputs are rejected", async () => 
     { choices: [{ message: { content: "partial" }, finish_reason: "length" }] },
     { model: "paid-fallback", choices: [{ message: { content: "OK" }, finish_reason: "stop" }] }
   ]) await assert.rejects(createModelClient(env, options(async () => Response.json(response))).run(MODEL_NAME, input));
+});
+
+test("canceling a failed experiment aborts in-flight and queued requests without more inference", async () => {
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const client = createModelClient(env, options(async (_url, init) => {
+    started();
+    return new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(new Error("canceled"))));
+  }));
+  const pending = client.run(MODEL_NAME, input);
+  await ready;
+  client.cancel();
+  await assert.rejects(pending, error => error.providerFailure && error.message.includes("canceled"));
+  await assert.rejects(client.run(MODEL_NAME, input), /canceled/);
+  assert.equal(client.stats.attempts, 1);
+});
+
+test("a provider outage is not retried again as a judge JSON repair", async () => {
+  const client = createModelClient(env, options(async () => Response.json({ error: { code: 503, message: "overloaded" } }, { status: 503 })));
+  const context = createEvaluationContext(client);
+  await assert.rejects(judgeSummary(context, developmentCorpus[0], developmentCorpus[0].reference), /503/);
+  assert.equal(context.usage.calls, 1);
+  assert.equal(client.stats.attempts, 2);
+  await context.cancel();
+  await assert.rejects(context.ai.run(MODEL_NAME, input), /canceled/);
 });

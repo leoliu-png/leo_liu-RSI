@@ -1,0 +1,2394 @@
+{
+  "version": "semantic-v4.1-nemotron",
+  "datasetVersion": "curated-2026-10-v2",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "checkedAt": "2026-10-06T14:00:05.759Z",
+  "passed": true,
+  "cached": false,
+  "results": [
+    {
+      "id": "correct-postgres-replica",
+      "expected": "pass",
+      "passed": true,
+      "sample": {
+        "id": "postgres-replica",
+        "title": "异步只读副本",
+        "article": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。副本故障时读请求会回退主库。这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+        "reference": "结论：异步只读副本提高读吞吐量，但不保证即时一致性。\n要点：订单写入 PostgreSQL 主库后返回成功；副本异步复制，因此刚下单后查询可能短时间看不到订单；副本故障时读请求回退主库。\n风险：不能用副本保证刚写入的订单立即可见。\n术语：文中只读副本通过异步复制接收变更。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。"
+          },
+          {
+            "id": "S2",
+            "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+          },
+          {
+            "id": "S3",
+            "text": "副本故障时读请求会回退主库。"
+          },
+          {
+            "id": "S4",
+            "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。",
+            "weight": 2,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "副本故障时读请求会回退主库。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "可能短时间看不到订单",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不保证副本上的即时一致性",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：异步只读副本提高读吞吐量，但不保证即时一致性。\n要点：订单写入 PostgreSQL 主库后返回成功；副本异步复制，因此刚下单后查询可能短时间看不到订单；副本故障时读请求回退主库。\n风险：不能用副本保证刚写入的订单立即可见。\n术语：文中只读副本通过异步复制接收变更。",
+      "metrics": {
+        "score": 100,
+        "scorerVersion": 4,
+        "rawScore": 100,
+        "hardFailure": false,
+        "eligible": true,
+        "coverage": 1,
+        "accuracy": 1,
+        "constraintPreservation": 1,
+        "format": 1,
+        "characters": 131,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 40,
+          "completeness": 25,
+          "constraints": 20,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [],
+        "missing": [],
+        "forbidden": [],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 明确指出该设计提高读吞吐量，但不保证副本上的即时一致性。"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 说明订单服务把写入提交到 PostgreSQL 主库，再返回成功。"
+            },
+            {
+              "id": "T3",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 说明只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+            },
+            {
+              "id": "T4",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文 S3 说明副本故障时读请求会回退主库。"
+            },
+            {
+              "id": "T5",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2",
+                "S4"
+              ],
+              "reason": "原文 S2 和 S4 共同表明副本不保证即时一致性，因此不能用副本保证刚写入的订单立即可见。"
+            },
+            {
+              "id": "T6",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 明确说明只读副本通过异步复制接收变更。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "T2 准确表达了订单写入 PostgreSQL 主库后返回成功。",
+              "quote": "订单写入 PostgreSQL 主库后返回成功"
+            },
+            {
+              "id": "F2",
+              "status": "covered",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3 准确表达了副本异步复制导致刚下单后查询可能短时间看不到订单。",
+              "quote": "副本异步复制，因此刚下单后查询可能短时间看不到订单"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "T4 准确表达了副本故障时读请求回退主库。",
+              "quote": "副本故障时读请求回退主库"
+            },
+            {
+              "id": "F4",
+              "status": "covered",
+              "unitIds": [
+                "T1"
+              ],
+              "reason": "T1 准确表达了该设计提高读吞吐量但不保证副本上的即时一致性。",
+              "quote": "异步只读副本提高读吞吐量，但不保证即时一致性"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "preserved",
+              "unitIds": [
+                "T3",
+                "T5"
+              ],
+              "reason": "T3 和 T5 完整保留了‘可能短时间看不到订单’这一条件。",
+              "quote": "副本异步复制，因此刚下单后查询可能短时间看不到订单"
+            },
+            {
+              "id": "K2",
+              "status": "preserved",
+              "unitIds": [
+                "T1",
+                "T5"
+              ],
+              "reason": "T1 和 T5 完整保留了‘不保证副本上的即时一致性’这一条件。",
+              "quote": "异步只读副本提高读吞吐量，但不保证即时一致性"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要结构清晰，各要点无明显跨段重复或冗余，表达可理解。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 1
+        }
+      }
+    },
+    {
+      "id": "correct-http-cache",
+      "expected": "pass",
+      "passed": true,
+      "sample": {
+        "id": "http-cache",
+        "title": "HTTP 条件请求",
+        "article": "服务器在响应中返回 ETag。客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。ETag 由服务端维护，不能仅凭文件名判断内容是否变化。该机制减少重复传输，但首次请求仍需获取完整资源。",
+        "reference": "结论：ETag 条件请求减少重复传输，首次请求仍需完整资源。\n要点：服务器返回 ETag；客户端下次带 If-None-Match；只有资源未变化时，服务器可返回 304 且不发送响应正文。\n风险：ETag 由服务端维护，不能仅凭文件名判断变化；首次请求仍需获取完整资源。\n术语：ETag 由服务端维护；If-None-Match 由客户端下次请求携带。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "服务器在响应中返回 ETag。"
+          },
+          {
+            "id": "S2",
+            "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+          },
+          {
+            "id": "S3",
+            "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。"
+          },
+          {
+            "id": "S4",
+            "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "服务器在响应中返回 ETag。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "该机制减少重复传输，但首次请求仍需获取完整资源。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "如果资源没有变化",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不能仅凭文件名判断内容是否变化",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "首次请求仍需获取完整资源",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：ETag 条件请求减少重复传输，首次请求仍需完整资源。\n要点：服务器返回 ETag；客户端下次带 If-None-Match；只有资源未变化时，服务器可返回 304 且不发送响应正文。\n风险：ETag 由服务端维护，不能仅凭文件名判断变化；首次请求仍需获取完整资源。\n术语：ETag 由服务端维护；If-None-Match 由客户端下次请求携带。",
+      "metrics": {
+        "score": 95,
+        "scorerVersion": 4,
+        "rawScore": 95,
+        "hardFailure": false,
+        "eligible": true,
+        "coverage": 1,
+        "accuracy": 1,
+        "constraintPreservation": 1,
+        "format": 1,
+        "characters": 166,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 40,
+          "completeness": 25,
+          "constraints": 20,
+          "clarity": 5,
+          "format": 5
+        },
+        "errors": [],
+        "missing": [],
+        "forbidden": [],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 明确指出该机制减少重复传输，但首次请求仍需获取完整资源，与摘要句子一致。"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 明确指出服务器在响应中返回 ETag，与摘要句子一致。"
+            },
+            {
+              "id": "T3",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 明确指出客户端下次请求携带 If-None-Match，与摘要句子一致。"
+            },
+            {
+              "id": "T4",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 明确指出如果资源没有变化，服务器可返回 304 且不再发送响应正文，与摘要句子一致。"
+            },
+            {
+              "id": "T5",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文 S3 明确指出 ETag 由服务端维护，不能仅凭文件名判断内容是否变化，与摘要句子一致。"
+            },
+            {
+              "id": "T6",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 明确指出首次请求仍需获取完整资源，与摘要句子一致。"
+            },
+            {
+              "id": "T7",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文 S3 明确指出 ETag 由服务端维护，与摘要句子一致。"
+            },
+            {
+              "id": "T8",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 明确指出客户端下次请求携带 If-None-Match，与摘要句子一致。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "摘要句子 T2 完整准确表达了服务器在响应中返回 ETag 这一事实。",
+              "quote": "服务器返回 ETag"
+            },
+            {
+              "id": "F2",
+              "status": "covered",
+              "unitIds": [
+                "T3",
+                "T4"
+              ],
+              "reason": "摘要句子 T3 和 T4 完整准确表达了客户端携带 If-None-Match 及服务器在资源未变化时返回 304 且不发送响应正文这一事实。",
+              "quote": "客户端下次带 If-None-Match"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T5",
+                "T7"
+              ],
+              "reason": "摘要句子 T5 和 T7 完整准确表达了 ETag 由服务端维护且不能仅凭文件名判断变化这一事实。",
+              "quote": "ETag 由服务端维护，不能仅凭文件名判断变化"
+            },
+            {
+              "id": "F4",
+              "status": "covered",
+              "unitIds": [
+                "T1",
+                "T6"
+              ],
+              "reason": "摘要句子 T1 和 T6 完整准确表达了该机制减少重复传输但首次请求仍需获取完整资源这一事实。",
+              "quote": "ETag 条件请求减少重复传输，首次请求仍需完整资源"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "preserved",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "摘要句子 T4 完整准确保留了'只有资源未变化时'这一条件。",
+              "quote": "只有资源未变化时，服务器可返回 304 且不发送响应正文"
+            },
+            {
+              "id": "K2",
+              "status": "preserved",
+              "unitIds": [
+                "T5"
+              ],
+              "reason": "摘要句子 T5 完整准确保留了'不能仅凭文件名判断变化'这一条件。",
+              "quote": "ETag 由服务端维护，不能仅凭文件名判断变化"
+            },
+            {
+              "id": "K3",
+              "status": "preserved",
+              "unitIds": [
+                "T1",
+                "T6"
+              ],
+              "reason": "摘要句子 T1 和 T6 完整准确保留了'首次请求仍需获取完整资源'这一条件。",
+              "quote": "ETag 条件请求减少重复传输，首次请求仍需完整资源"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": false,
+            "reason": "摘要表达清晰可理解，但存在明显冗余：T1 与 T6 内容重复（均表达首次请求需完整资源），T5 与 T7 内容重复（均表达 ETag 由服务端维护）。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 1
+        }
+      }
+    },
+    {
+      "id": "correct-passkeys",
+      "expected": "pass",
+      "passed": true,
+      "sample": {
+        "id": "passkeys",
+        "title": "通行密钥登录",
+        "article": "WebAuthn 登录时，服务器生成一次性 challenge。认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。私钥留在用户设备，不会发送给网站。若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+        "reference": "结论：WebAuthn 通过挑战签名验证身份，但不能消除账户恢复问题。\n要点：服务器生成一次性 challenge；认证器用私钥签名，服务器用已登记公钥验签；私钥留在设备，不发送给网站。\n风险：设备丢失时，用户需要事先配置的恢复方式。\n术语：challenge 是一次性挑战；私钥用于签名，公钥用于验证签名。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "WebAuthn 登录时，服务器生成一次性 challenge。"
+          },
+          {
+            "id": "S2",
+            "text": "认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。"
+          },
+          {
+            "id": "S3",
+            "text": "私钥留在用户设备，不会发送给网站。"
+          },
+          {
+            "id": "S4",
+            "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "WebAuthn 登录时，服务器生成一次性 challenge。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "私钥留在用户设备，不会发送给网站。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "私钥留在用户设备，不会发送给网站",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "用户需要事先配置的恢复方式",
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "通行密钥不能消除账户恢复问题",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：WebAuthn 通过挑战签名验证身份，但不能消除账户恢复问题。\n要点：服务器生成一次性 challenge；认证器用私钥签名，服务器用已登记公钥验签；私钥留在设备，不发送给网站。\n风险：设备丢失时，用户需要事先配置的恢复方式。\n术语：challenge 是一次性挑战；私钥用于签名，公钥用于验证签名。",
+      "metrics": {
+        "score": 100,
+        "scorerVersion": 4,
+        "rawScore": 100,
+        "hardFailure": false,
+        "eligible": true,
+        "coverage": 1,
+        "accuracy": 1,
+        "constraintPreservation": 1,
+        "format": 1,
+        "characters": 148,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 40,
+          "completeness": 25,
+          "constraints": 20,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [],
+        "missing": [],
+        "forbidden": [],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2",
+                "S4"
+              ],
+              "reason": "原文 S2 说明认证器用私钥签名、服务器用公钥验签，S4 明确指出通行密钥不能消除账户恢复问题，两句合力支撑该断言。"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 直接陈述：WebAuthn 登录时，服务器生成一次性 challenge。"
+            },
+            {
+              "id": "T3",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 完整描述：认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。"
+            },
+            {
+              "id": "T4",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文 S3 明确：私钥留在用户设备，不会发送给网站。"
+            },
+            {
+              "id": "T5",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 说明：若设备丢失，用户需要事先配置的恢复方式。"
+            },
+            {
+              "id": "T6",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 称服务器生成一次性 challenge，即 challenge 是一次性挑战。"
+            },
+            {
+              "id": "T7",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 陈述认证器用私钥签名、服务器用公钥验签，直接对应私钥用于签名、公钥用于验证签名。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2",
+                "T6"
+              ],
+              "reason": "T2 和 T6 完整表达了服务器生成一次性 challenge 这一事实。",
+              "quote": "服务器生成一次性 challenge"
+            },
+            {
+              "id": "F2",
+              "status": "covered",
+              "unitIds": [
+                "T3",
+                "T7"
+              ],
+              "reason": "T3 和 T7 完整覆盖了认证器用私钥签名、服务器用公钥验签的核心流程。",
+              "quote": "认证器用私钥签名，服务器用已登记公钥验签"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "T4 准确表达了私钥留在设备、不发送给网站。",
+              "quote": "私钥留在设备，不发送给网站"
+            },
+            {
+              "id": "F4",
+              "status": "covered",
+              "unitIds": [
+                "T1",
+                "T5"
+              ],
+              "reason": "T1 给出总体结论，T5 具体说明设备丢失时需事先配置恢复方式，两者合力完整覆盖 F4。",
+              "quote": "WebAuthn 通过挑战签名验证身份，但不能消除账户恢复问题"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "preserved",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "T4 完整保留了私钥留在用户设备、不会发送给网站这一约束。",
+              "quote": "私钥留在设备，不发送给网站"
+            },
+            {
+              "id": "K2",
+              "status": "preserved",
+              "unitIds": [
+                "T5"
+              ],
+              "reason": "T5 准确表达了用户需要事先配置的恢复方式这一条件。",
+              "quote": "设备丢失时，用户需要事先配置的恢复方式"
+            },
+            {
+              "id": "K3",
+              "status": "preserved",
+              "unitIds": [
+                "T1"
+              ],
+              "reason": "T1 明确指出通行密钥不能消除账户恢复问题，完整保留了该否定性约束。",
+              "quote": "WebAuthn 通过挑战签名验证身份，但不能消除账户恢复问题"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要结构清晰，各要点无跨段重复，术语解释简明且有原文依据。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 2
+        }
+      }
+    },
+    {
+      "id": "wrong-cache-97",
+      "expected": "reject",
+      "passed": true,
+      "sample": {
+        "id": "http-cache",
+        "title": "HTTP 条件请求",
+        "article": "服务器在响应中返回 ETag。客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。ETag 由服务端维护，不能仅凭文件名判断内容是否变化。该机制减少重复传输，但首次请求仍需获取完整资源。",
+        "reference": "结论：ETag 条件请求减少重复传输，首次请求仍需完整资源。\n要点：服务器返回 ETag；客户端下次带 If-None-Match；只有资源未变化时，服务器可返回 304 且不发送响应正文。\n风险：ETag 由服务端维护，不能仅凭文件名判断变化；首次请求仍需获取完整资源。\n术语：ETag 由服务端维护；If-None-Match 由客户端下次请求携带。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "服务器在响应中返回 ETag。"
+          },
+          {
+            "id": "S2",
+            "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+          },
+          {
+            "id": "S3",
+            "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。"
+          },
+          {
+            "id": "S4",
+            "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "服务器在响应中返回 ETag。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "该机制减少重复传输，但首次请求仍需获取完整资源。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "如果资源没有变化",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不能仅凭文件名判断内容是否变化",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "首次请求仍需获取完整资源",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：ETag 能让所有请求跳过资源更新。\n要点：客户端带 If-None-Match 后，即使内容已经变化，服务器也应返回 304，不发送响应正文；首次请求同样可以跳过正文。\n风险：该机制保证客户端始终获取最新数据，没有一致性问题。\n术语：ETag 只是文件名，不会随资源内容变化。",
+      "metrics": {
+        "score": 15,
+        "scorerVersion": 4,
+        "rawScore": 15,
+        "hardFailure": true,
+        "eligible": false,
+        "coverage": 0,
+        "accuracy": 0,
+        "constraintPreservation": 0,
+        "format": 1,
+        "characters": 134,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 0,
+          "completeness": 0,
+          "constraints": 0,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [
+          {
+            "category": "contradicted",
+            "text": "ETag 能让所有请求跳过资源更新",
+            "reason": "原文明确指出仅当资源未变化时返回 304 跳过正文，且首次请求仍需获取完整资源，与“所有请求跳过资源更新”矛盾。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+              },
+              {
+                "id": "S4",
+                "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "客户端带 If-None-Match 后，即使内容已经变化，服务器也应返回 304，不发送响应正文",
+            "reason": "原文规定资源未变化时才返回 304；摘要称即使内容已变化也应返回 304，直接违背条件。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "首次请求同样可以跳过正文",
+            "reason": "原文明确“首次请求仍需获取完整资源”，摘要称可跳过正文，与原文矛盾。",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+              }
+            ]
+          },
+          {
+            "category": "unsupported",
+            "text": "该机制保证客户端始终获取最新数据，没有一致性问题",
+            "reason": "原文未提及一致性保证或“始终获取最新数据”，属无依据推断。",
+            "evidence": []
+          },
+          {
+            "category": "contradicted",
+            "text": "ETag 只是文件名，不会随资源内容变化",
+            "reason": "原文明确“ETag 由服务端维护，不能仅凭文件名判断内容是否变化”，摘要称“ETag 只是文件名，不会随资源内容变化”，完全相反。",
+            "evidence": [
+              {
+                "id": "S3",
+                "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。"
+              }
+            ]
+          },
+          {
+            "category": "wrong_fact",
+            "text": "客户端带 If-None-Match 后，即使内容已经变化，服务器也应返回 304，不发送响应正文",
+            "reason": "摘要 T2 错误表述为即使内容变化也返回 304，与原文事实相反。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+              }
+            ]
+          },
+          {
+            "category": "wrong_fact",
+            "text": "ETag 只是文件名，不会随资源内容变化",
+            "reason": "摘要 T5 称 ETag 只是文件名且不随内容变化，与原文“由服务端维护、不能仅凭文件名判断”相反。",
+            "evidence": [
+              {
+                "id": "S3",
+                "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。"
+              }
+            ]
+          },
+          {
+            "category": "wrong_fact",
+            "text": "ETag 能让所有请求跳过资源更新",
+            "reason": "摘要 T1、T3 声称所有请求或首次请求可跳过正文，与原文“减少重复传输、首次仍需完整资源”相悖。",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "客户端带 If-None-Match 后，即使内容已经变化，服务器也应返回 304，不发送响应正文",
+            "reason": "摘要 T2 忽略“如果资源没有变化”条件，改为“即使内容已经变化也应返回 304”，反转了前提。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "ETag 只是文件名，不会随资源内容变化",
+            "reason": "摘要 T5 称“ETag 只是文件名，不会随资源内容变化”，直接违背“不能仅凭文件名判断”的约束。",
+            "evidence": [
+              {
+                "id": "S3",
+                "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "首次请求同样可以跳过正文",
+            "reason": "摘要 T3 称“首次请求同样可以跳过正文”，与“首次请求仍需获取完整资源”矛盾。",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+              }
+            ]
+          }
+        ],
+        "missing": [
+          "服务器在响应中返回 ETag。"
+        ],
+        "forbidden": [
+          "contradicted: 原文明确指出仅当资源未变化时返回 304 跳过正文，且首次请求仍需获取完整资源，与“所有请求跳过资源更新”矛盾。",
+          "contradicted: 原文规定资源未变化时才返回 304；摘要称即使内容已变化也应返回 304，直接违背条件。",
+          "contradicted: 原文明确“首次请求仍需获取完整资源”，摘要称可跳过正文，与原文矛盾。",
+          "unsupported: 原文未提及一致性保证或“始终获取最新数据”，属无依据推断。",
+          "contradicted: 原文明确“ETag 由服务端维护，不能仅凭文件名判断内容是否变化”，摘要称“ETag 只是文件名，不会随资源内容变化”，完全相反。",
+          "wrong_fact: 摘要 T2 错误表述为即使内容变化也返回 304，与原文事实相反。",
+          "wrong_fact: 摘要 T5 称 ETag 只是文件名且不随内容变化，与原文“由服务端维护、不能仅凭文件名判断”相反。",
+          "wrong_fact: 摘要 T1、T3 声称所有请求或首次请求可跳过正文，与原文“减少重复传输、首次仍需完整资源”相悖。",
+          "violated_constraint: 摘要 T2 忽略“如果资源没有变化”条件，改为“即使内容已经变化也应返回 304”，反转了前提。",
+          "violated_constraint: 摘要 T5 称“ETag 只是文件名，不会随资源内容变化”，直接违背“不能仅凭文件名判断”的约束。",
+          "violated_constraint: 摘要 T3 称“首次请求同样可以跳过正文”，与“首次请求仍需获取完整资源”矛盾。"
+        ],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S2",
+                "S4"
+              ],
+              "reason": "原文明确指出仅当资源未变化时返回 304 跳过正文，且首次请求仍需获取完整资源，与“所有请求跳过资源更新”矛盾。"
+            },
+            {
+              "id": "T2",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文规定资源未变化时才返回 304；摘要称即使内容已变化也应返回 304，直接违背条件。"
+            },
+            {
+              "id": "T3",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文明确“首次请求仍需获取完整资源”，摘要称可跳过正文，与原文矛盾。"
+            },
+            {
+              "id": "T4",
+              "verdict": "unsupported",
+              "sourceIds": [],
+              "reason": "原文未提及一致性保证或“始终获取最新数据”，属无依据推断。"
+            },
+            {
+              "id": "T5",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文明确“ETag 由服务端维护，不能仅凭文件名判断内容是否变化”，摘要称“ETag 只是文件名，不会随资源内容变化”，完全相反。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "omitted",
+              "unitIds": [],
+              "reason": "摘要未表达“服务器在响应中返回 ETag”这一核心事实。",
+              "quote": ""
+            },
+            {
+              "id": "F2",
+              "status": "wrong",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "摘要 T2 错误表述为即使内容变化也返回 304，与原文事实相反。",
+              "quote": "客户端带 If-None-Match 后，即使内容已经变化，服务器也应返回 304，不发送响应正文"
+            },
+            {
+              "id": "F3",
+              "status": "wrong",
+              "unitIds": [
+                "T5"
+              ],
+              "reason": "摘要 T5 称 ETag 只是文件名且不随内容变化，与原文“由服务端维护、不能仅凭文件名判断”相反。",
+              "quote": "ETag 只是文件名，不会随资源内容变化"
+            },
+            {
+              "id": "F4",
+              "status": "wrong",
+              "unitIds": [
+                "T1",
+                "T3"
+              ],
+              "reason": "摘要 T1、T3 声称所有请求或首次请求可跳过正文，与原文“减少重复传输、首次仍需完整资源”相悖。",
+              "quote": "ETag 能让所有请求跳过资源更新"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "violated",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "摘要 T2 忽略“如果资源没有变化”条件，改为“即使内容已经变化也应返回 304”，反转了前提。",
+              "quote": "客户端带 If-None-Match 后，即使内容已经变化，服务器也应返回 304，不发送响应正文"
+            },
+            {
+              "id": "K2",
+              "status": "violated",
+              "unitIds": [
+                "T5"
+              ],
+              "reason": "摘要 T5 称“ETag 只是文件名，不会随资源内容变化”，直接违背“不能仅凭文件名判断”的约束。",
+              "quote": "ETag 只是文件名，不会随资源内容变化"
+            },
+            {
+              "id": "K3",
+              "status": "violated",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "摘要 T3 称“首次请求同样可以跳过正文”，与“首次请求仍需获取完整资源”矛盾。",
+              "quote": "首次请求同样可以跳过正文"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要句子结构清晰可理解，各要点主题不同，无明显跨段重复或冗余。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 2
+        }
+      }
+    },
+    {
+      "id": "wrong-replica-negation",
+      "expected": "reject",
+      "passed": true,
+      "sample": {
+        "id": "postgres-replica",
+        "title": "异步只读副本",
+        "article": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。副本故障时读请求会回退主库。这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+        "reference": "结论：异步只读副本提高读吞吐量，但不保证即时一致性。\n要点：订单写入 PostgreSQL 主库后返回成功；副本异步复制，因此刚下单后查询可能短时间看不到订单；副本故障时读请求回退主库。\n风险：不能用副本保证刚写入的订单立即可见。\n术语：文中只读副本通过异步复制接收变更。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。"
+          },
+          {
+            "id": "S2",
+            "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+          },
+          {
+            "id": "S3",
+            "text": "副本故障时读请求会回退主库。"
+          },
+          {
+            "id": "S4",
+            "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。",
+            "weight": 2,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "副本故障时读请求会回退主库。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "可能短时间看不到订单",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不保证副本上的即时一致性",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：异步只读副本保证用户刚下单就能查询到订单。\n要点：PostgreSQL 主库写入后返回成功；副本异步复制接收变更，用户立即查询一定能看到订单；副本故障回退主库。\n风险：原文表明副本不存在一致性限制。\n术语：异步复制不需要等待，仍保证所有变更立即可见。",
+      "metrics": {
+        "score": 39.4,
+        "scorerVersion": 4,
+        "rawScore": 39.4,
+        "hardFailure": true,
+        "eligible": false,
+        "coverage": 0.444,
+        "accuracy": 0.333,
+        "constraintPreservation": 0,
+        "format": 1,
+        "characters": 124,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 13.33,
+          "completeness": 11.11,
+          "constraints": 0,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [
+          {
+            "category": "contradicted",
+            "text": "异步只读副本保证用户刚下单就能查询到订单",
+            "reason": "原文明确指出异步复制导致用户刚下单后立即查询副本可能短时间看不到订单，且不保证副本上的即时一致性，与摘要断言的“保证用户刚下单就能查询到订单”直接矛盾。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+              },
+              {
+                "id": "S4",
+                "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "副本异步复制接收变更，用户立即查询一定能看到订单",
+            "reason": "原文 S2 明确指出用户刚下单后立即查询副本，可能短时间看不到订单，与摘要断言的“用户立即查询一定能看到订单”直接矛盾。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "原文表明副本不存在一致性限制",
+            "reason": "原文 S4 明确指出该设计不保证副本上的即时一致性，即存在一致性限制，与摘要断言的“原文表明副本不存在一致性限制”直接矛盾。",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "异步复制不需要等待，仍保证所有变更立即可见",
+            "reason": "原文 S2 和 S4 明确指出异步复制不保证即时一致性，用户可能短时间看不到订单，与摘要断言的“异步复制不需要等待，仍保证所有变更立即可见”直接矛盾。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+              },
+              {
+                "id": "S4",
+                "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+              }
+            ]
+          },
+          {
+            "category": "wrong_fact",
+            "text": "异步只读副本保证用户刚下单就能查询到订单",
+            "reason": "摘要在 T1、T3、T6 中错误表达了该事实，声称异步副本保证即时可见、用户立即查询一定能看到订单、异步复制保证所有变更立即可见，均与原文 S2 矛盾。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+              }
+            ]
+          },
+          {
+            "category": "wrong_fact",
+            "text": "原文表明副本不存在一致性限制",
+            "reason": "摘要句子 T5 错误表达了该事实，声称原文表明副本不存在一致性限制，与原文 S4 明确指出的“不保证副本上的即时一致性”直接矛盾。",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "异步只读副本保证用户刚下单就能查询到订单",
+            "reason": "原文约束“可能短时间看不到订单”在摘要 T1、T3、T6 中被反转为“保证能查询到”、“一定能看到”、“立即可见”，违反了原文的条件限制。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "原文表明副本不存在一致性限制",
+            "reason": "原文约束“不保证副本上的即时一致性”在摘要 T5 中被表述为“不存在一致性限制”，在 T6 中被表述为“保证所有变更立即可见”，均违反了原文的约束条件。",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+              }
+            ]
+          }
+        ],
+        "missing": [],
+        "forbidden": [
+          "contradicted: 原文明确指出异步复制导致用户刚下单后立即查询副本可能短时间看不到订单，且不保证副本上的即时一致性，与摘要断言的“保证用户刚下单就能查询到订单”直接矛盾。",
+          "contradicted: 原文 S2 明确指出用户刚下单后立即查询副本，可能短时间看不到订单，与摘要断言的“用户立即查询一定能看到订单”直接矛盾。",
+          "contradicted: 原文 S4 明确指出该设计不保证副本上的即时一致性，即存在一致性限制，与摘要断言的“原文表明副本不存在一致性限制”直接矛盾。",
+          "contradicted: 原文 S2 和 S4 明确指出异步复制不保证即时一致性，用户可能短时间看不到订单，与摘要断言的“异步复制不需要等待，仍保证所有变更立即可见”直接矛盾。",
+          "wrong_fact: 摘要在 T1、T3、T6 中错误表达了该事实，声称异步副本保证即时可见、用户立即查询一定能看到订单、异步复制保证所有变更立即可见，均与原文 S2 矛盾。",
+          "wrong_fact: 摘要句子 T5 错误表达了该事实，声称原文表明副本不存在一致性限制，与原文 S4 明确指出的“不保证副本上的即时一致性”直接矛盾。",
+          "violated_constraint: 原文约束“可能短时间看不到订单”在摘要 T1、T3、T6 中被反转为“保证能查询到”、“一定能看到”、“立即可见”，违反了原文的条件限制。",
+          "violated_constraint: 原文约束“不保证副本上的即时一致性”在摘要 T5 中被表述为“不存在一致性限制”，在 T6 中被表述为“保证所有变更立即可见”，均违反了原文的约束条件。"
+        ],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S2",
+                "S4"
+              ],
+              "reason": "原文明确指出异步复制导致用户刚下单后立即查询副本可能短时间看不到订单，且不保证副本上的即时一致性，与摘要断言的“保证用户刚下单就能查询到订单”直接矛盾。"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 明确说明订单服务把写入提交到 PostgreSQL 主库，再返回成功。"
+            },
+            {
+              "id": "T3",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 明确指出用户刚下单后立即查询副本，可能短时间看不到订单，与摘要断言的“用户立即查询一定能看到订单”直接矛盾。"
+            },
+            {
+              "id": "T4",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文 S3 明确说明副本故障时读请求会回退主库。"
+            },
+            {
+              "id": "T5",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 明确指出该设计不保证副本上的即时一致性，即存在一致性限制，与摘要断言的“原文表明副本不存在一致性限制”直接矛盾。"
+            },
+            {
+              "id": "T6",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S2",
+                "S4"
+              ],
+              "reason": "原文 S2 和 S4 明确指出异步复制不保证即时一致性，用户可能短时间看不到订单，与摘要断言的“异步复制不需要等待，仍保证所有变更立即可见”直接矛盾。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "摘要句子 T2 准确表达了原文 S1 的核心事实：订单服务写入主库后返回成功。",
+              "quote": "PostgreSQL 主库写入后返回成功"
+            },
+            {
+              "id": "F2",
+              "status": "wrong",
+              "unitIds": [
+                "T1",
+                "T3",
+                "T6"
+              ],
+              "reason": "摘要在 T1、T3、T6 中错误表达了该事实，声称异步副本保证即时可见、用户立即查询一定能看到订单、异步复制保证所有变更立即可见，均与原文 S2 矛盾。",
+              "quote": "异步只读副本保证用户刚下单就能查询到订单"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "摘要句子 T4 准确表达了原文 S3 的核心事实：副本故障时读请求回退主库。",
+              "quote": "副本故障回退主库"
+            },
+            {
+              "id": "F4",
+              "status": "wrong",
+              "unitIds": [
+                "T5"
+              ],
+              "reason": "摘要句子 T5 错误表达了该事实，声称原文表明副本不存在一致性限制，与原文 S4 明确指出的“不保证副本上的即时一致性”直接矛盾。",
+              "quote": "原文表明副本不存在一致性限制"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "violated",
+              "unitIds": [
+                "T1",
+                "T3",
+                "T6"
+              ],
+              "reason": "原文约束“可能短时间看不到订单”在摘要 T1、T3、T6 中被反转为“保证能查询到”、“一定能看到”、“立即可见”，违反了原文的条件限制。",
+              "quote": "异步只读副本保证用户刚下单就能查询到订单"
+            },
+            {
+              "id": "K2",
+              "status": "violated",
+              "unitIds": [
+                "T5",
+                "T6"
+              ],
+              "reason": "原文约束“不保证副本上的即时一致性”在摘要 T5 中被表述为“不存在一致性限制”，在 T6 中被表述为“保证所有变更立即可见”，均违反了原文的约束条件。",
+              "quote": "原文表明副本不存在一致性限制"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要语句表达清晰可理解，各句子之间无明显跨段重复或冗余内容。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 1
+        }
+      }
+    },
+    {
+      "id": "wrong-payment-cause",
+      "expected": "reject",
+      "passed": true,
+      "sample": {
+        "id": "retry-payment",
+        "title": "支付超时与幂等键",
+        "article": "支付接口处理成功后可能在响应到达客户端之前断开连接，因此客户端超时并不等于付款失败。客户端重试时应复用同一个幂等键，服务端在 24 小时内为相同键和相同金额返回首次处理结果。若相同键对应不同金额，接口拒绝请求而不会执行第二笔付款。幂等记录过期后，旧键可能被当作新请求处理，因此对超出 24 小时的交易必须先查询账单再决定是否重试。团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。",
+        "reference": "结论：付款超时可能已成功，重试需要复用幂等键并检查有效期。\n要点：相同键与金额在 24 小时内返回首次结果；同键不同金额被拒绝；过期旧键可能成为新请求，超期交易先查账单。\n风险：不能把超时当失败；一周内重试占比由 8% 降至 5%，但同时变更网络路由，无法单独归因于幂等逻辑。\n术语：幂等键用于关联同一付款请求的重试。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "支付接口处理成功后可能在响应到达客户端之前断开连接，因此客户端超时并不等于付款失败。"
+          },
+          {
+            "id": "S2",
+            "text": "客户端重试时应复用同一个幂等键，服务端在 24 小时内为相同键和相同金额返回首次处理结果。"
+          },
+          {
+            "id": "S3",
+            "text": "若相同键对应不同金额，接口拒绝请求而不会执行第二笔付款。"
+          },
+          {
+            "id": "S4",
+            "text": "幂等记录过期后，旧键可能被当作新请求处理，因此对超出 24 小时的交易必须先查询账单再决定是否重试。"
+          },
+          {
+            "id": "S5",
+            "text": "团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "支付接口处理成功后可能在响应到达客户端之前断开连接，因此客户端超时并不等于付款失败。",
+            "weight": 3,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "客户端重试时应复用同一个幂等键，服务端在 24 小时内为相同键和相同金额返回首次处理结果。",
+            "weight": 2,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "若相同键对应不同金额，接口拒绝请求而不会执行第二笔付款。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "幂等记录过期后，旧键可能被当作新请求处理，因此对超出 24 小时的交易必须先查询账单再决定是否重试。",
+            "weight": 3,
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "F5",
+            "text": "团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。",
+            "weight": 3,
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "客户端超时并不等于付款失败",
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "相同键和相同金额",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "旧键可能被当作新请求处理",
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "K4",
+            "text": "无法单独归因于幂等逻辑",
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：一周数据证明幂等逻辑使重试占比从 8% 降至 5%。\n要点：支付响应前可能断连，超时不等于失败；同键同金额在 24 小时内返回首次结果，同键不同金额拒绝；超期先查账单。\n风险：虽然同期调整网络路由，但重试下降可以全部归因于幂等逻辑。\n术语：幂等键用于识别同一付款请求。",
+      "metrics": {
+        "score": 49,
+        "scorerVersion": 4,
+        "rawScore": 69.2,
+        "hardFailure": true,
+        "eligible": false,
+        "coverage": 0.769,
+        "accuracy": 0.5,
+        "constraintPreservation": 0.75,
+        "format": 1,
+        "characters": 129,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 20,
+          "completeness": 19.23,
+          "constraints": 15,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [
+          {
+            "category": "contradicted",
+            "text": "一周数据证明幂等逻辑使重试占比从 8% 降至 5%",
+            "reason": "原文明确指出同期调整了网络路由，无法单独归因于幂等逻辑，摘要却声称数据证明幂等逻辑导致下降，与原文矛盾。",
+            "evidence": [
+              {
+                "id": "S5",
+                "text": "团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "虽然同期调整网络路由，但重试下降可以全部归因于幂等逻辑",
+            "reason": "原文明确指出无法单独归因于幂等逻辑，摘要却声称重试下降可以全部归因于幂等逻辑，直接违背原文。",
+            "evidence": [
+              {
+                "id": "S5",
+                "text": "团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。"
+              }
+            ]
+          },
+          {
+            "category": "unsupported",
+            "text": "幂等键用于识别同一付款请求",
+            "reason": "原文未对幂等键的定义或用途作解释，摘要自行添加了“用于识别同一付款请求”的定义，无原文依据。",
+            "evidence": []
+          },
+          {
+            "category": "wrong_fact",
+            "text": "一周数据证明幂等逻辑使重试占比从 8% 降至 5%",
+            "reason": "T1 和 T5 错误声称数据证明幂等逻辑导致重试下降且可全部归因，与原文‘无法单独归因’直接矛盾。",
+            "evidence": [
+              {
+                "id": "S5",
+                "text": "团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "一周数据证明幂等逻辑使重试占比从 8% 降至 5%",
+            "reason": "T1 和 T5 违背了‘无法单独归因于幂等逻辑’的限制，错误扩大了归因范围。",
+            "evidence": [
+              {
+                "id": "S5",
+                "text": "团队在一周内观察到重试请求占比从 8% 降到 5%，同期也调整了网络路由，无法单独归因于幂等逻辑。"
+              }
+            ]
+          }
+        ],
+        "missing": [],
+        "forbidden": [
+          "contradicted: 原文明确指出同期调整了网络路由，无法单独归因于幂等逻辑，摘要却声称数据证明幂等逻辑导致下降，与原文矛盾。",
+          "contradicted: 原文明确指出无法单独归因于幂等逻辑，摘要却声称重试下降可以全部归因于幂等逻辑，直接违背原文。",
+          "unsupported: 原文未对幂等键的定义或用途作解释，摘要自行添加了“用于识别同一付款请求”的定义，无原文依据。",
+          "wrong_fact: T1 和 T5 错误声称数据证明幂等逻辑导致重试下降且可全部归因，与原文‘无法单独归因’直接矛盾。",
+          "violated_constraint: T1 和 T5 违背了‘无法单独归因于幂等逻辑’的限制，错误扩大了归因范围。"
+        ],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S5"
+              ],
+              "reason": "原文明确指出同期调整了网络路由，无法单独归因于幂等逻辑，摘要却声称数据证明幂等逻辑导致下降，与原文矛盾。"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 说明支付接口处理成功后可能在响应到达客户端前断开连接，因此客户端超时不等于付款失败，摘要表述准确。"
+            },
+            {
+              "id": "T3",
+              "verdict": "supported",
+              "sourceIds": [
+                "S2",
+                "S3"
+              ],
+              "reason": "原文 S2 规定同键同金额 24 小时内返回首次结果，S3 规定同键不同金额拒绝请求，摘要综合表述正确。"
+            },
+            {
+              "id": "T4",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 指出幂等记录过期后旧键可能被当作新请求处理，因此超出 24 小时的交易必须先查询账单再决定是否重试，摘要表述准确。"
+            },
+            {
+              "id": "T5",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S5"
+              ],
+              "reason": "原文明确指出无法单独归因于幂等逻辑，摘要却声称重试下降可以全部归因于幂等逻辑，直接违背原文。"
+            },
+            {
+              "id": "T6",
+              "verdict": "unsupported",
+              "sourceIds": [],
+              "reason": "原文未对幂等键的定义或用途作解释，摘要自行添加了“用于识别同一付款请求”的定义，无原文依据。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "T2 准确表达了支付响应前可能断连、超时不等于失败的核心事实。",
+              "quote": "支付响应前可能断连，超时不等于失败"
+            },
+            {
+              "id": "F2",
+              "status": "covered",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3 完整覆盖了同键同金额 24 小时内返回首次结果的规则。",
+              "quote": "同键同金额在 24 小时内返回首次结果，同键不同金额拒绝"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3 完整覆盖了同键不同金额拒绝请求的规则。",
+              "quote": "同键同金额在 24 小时内返回首次结果，同键不同金额拒绝"
+            },
+            {
+              "id": "F4",
+              "status": "covered",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "T4 准确表达了幂等记录过期后需先查账单再决定重试的要求。",
+              "quote": "超期先查账单"
+            },
+            {
+              "id": "F5",
+              "status": "wrong",
+              "unitIds": [
+                "T1",
+                "T5"
+              ],
+              "reason": "T1 和 T5 错误声称数据证明幂等逻辑导致重试下降且可全部归因，与原文‘无法单独归因’直接矛盾。",
+              "quote": "一周数据证明幂等逻辑使重试占比从 8% 降至 5%"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "preserved",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "T2 保留了‘客户端超时并不等于付款失败’的约束条件。",
+              "quote": "支付响应前可能断连，超时不等于失败"
+            },
+            {
+              "id": "K2",
+              "status": "preserved",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3 保留了‘相同键和相同金额’的前置条件。",
+              "quote": "同键同金额在 24 小时内返回首次结果，同键不同金额拒绝"
+            },
+            {
+              "id": "K3",
+              "status": "preserved",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "T4 体现了‘旧键可能被当作新请求处理’的风险约束。",
+              "quote": "超期先查账单"
+            },
+            {
+              "id": "K4",
+              "status": "violated",
+              "unitIds": [
+                "T1",
+                "T5"
+              ],
+              "reason": "T1 和 T5 违背了‘无法单独归因于幂等逻辑’的限制，错误扩大了归因范围。",
+              "quote": "一周数据证明幂等逻辑使重试占比从 8% 降至 5%"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要结构清晰、语句可理解，各要点无明显跨段重复或冗余。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 2
+        }
+      }
+    },
+    {
+      "id": "wrong-backup-number",
+      "expected": "reject",
+      "passed": true,
+      "sample": {
+        "id": "backup-restore",
+        "title": "备份成功与恢复演练",
+        "article": "系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复。团队将恢复时间目标设为 45 分钟，但该目标尚未在更大数据库上验证。若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。",
+        "reference": "结论：备份上传成功不能代替恢复演练。\n要点：每 6 小时增量、每天完整备份；单个 80 GB 库的演练耗时 37 分钟，核验校验和及关键表记录数；恢复目标为 45 分钟。\n风险：大库尚未验证；最后增量损坏时会退回较早完整备份，数据损失可能超过 6 小时。\n术语：恢复时间目标是团队设定的目标，并非所有数据库的实测结果。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。"
+          },
+          {
+            "id": "S2",
+            "text": "最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。"
+          },
+          {
+            "id": "S3",
+            "text": "备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复。"
+          },
+          {
+            "id": "S4",
+            "text": "团队将恢复时间目标设为 45 分钟，但该目标尚未在更大数据库上验证。"
+          },
+          {
+            "id": "S5",
+            "text": "若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复。",
+            "weight": 3,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "团队将恢复时间目标设为 45 分钟，但该目标尚未在更大数据库上验证。",
+            "weight": 3,
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "F5",
+            "text": "若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。",
+            "weight": 3,
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "不代表数据库一定能够恢复",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "尚未在更大数据库上验证",
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "不能保证任何情况下都只丢失 6 小时数据",
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：备份上传成功不能代替恢复演练。\n要点：每 6 小时增量、每天完整备份；单个 80 GB 库的演练耗时 73 分钟，核验校验和及关键表记录数；恢复目标为 45 分钟。\n风险：大库尚未验证；最后增量损坏时会退回较早完整备份，数据损失可能超过 6 小时。\n术语：恢复时间目标是团队设定的目标，并非所有数据库的实测结果。",
+      "metrics": {
+        "score": 49,
+        "scorerVersion": 4,
+        "rawScore": 91.4,
+        "hardFailure": true,
+        "eligible": false,
+        "coverage": 0.885,
+        "accuracy": 0.857,
+        "constraintPreservation": 1,
+        "format": 1,
+        "characters": 145,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 34.29,
+          "completeness": 22.12,
+          "constraints": 20,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [
+          {
+            "category": "contradicted",
+            "text": "单个 80 GB 库的演练耗时 73 分钟，核验校验和及关键表记录数",
+            "reason": "原文 S2 称演练耗时 37 分钟，摘要写成 73 分钟，数字错误。",
+            "evidence": [
+              {
+                "id": "S2",
+                "text": "最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。"
+              }
+            ]
+          }
+        ],
+        "missing": [
+          "最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。"
+        ],
+        "forbidden": [
+          "contradicted: 原文 S2 称演练耗时 37 分钟，摘要写成 73 分钟，数字错误。"
+        ],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文 S3 明确指出备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复，支持该结论。"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文 S1 明确说明系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。"
+            },
+            {
+              "id": "T3",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S2"
+              ],
+              "reason": "原文 S2 称演练耗时 37 分钟，摘要写成 73 分钟，数字错误。"
+            },
+            {
+              "id": "T4",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 明确团队将恢复时间目标设为 45 分钟。"
+            },
+            {
+              "id": "T5",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 说明该目标尚未在更大数据库上验证。"
+            },
+            {
+              "id": "T6",
+              "verdict": "supported",
+              "sourceIds": [
+                "S5"
+              ],
+              "reason": "原文 S5 说明若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。"
+            },
+            {
+              "id": "T7",
+              "verdict": "supported",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文 S4 表明恢复时间目标是团队设定的目标，且尚未在更大数据库上验证，即并非所有数据库的实测结果。"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "T2 完整准确表达了备份频率与类型。",
+              "quote": "每 6 小时增量、每天完整备份"
+            },
+            {
+              "id": "F2",
+              "status": "partial",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3 表达了演练场景与验证内容，但耗时数字错误（73 分钟 vs 37 分钟），关键事实部分准确。",
+              "quote": "单个 80 GB 库的演练耗时 73 分钟，核验校验和及关键表记录数"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T1"
+              ],
+              "reason": "T1 准确表达了备份上传成功不代表可恢复。",
+              "quote": "备份上传成功不能代替恢复演练"
+            },
+            {
+              "id": "F4",
+              "status": "covered",
+              "unitIds": [
+                "T4",
+                "T5",
+                "T7"
+              ],
+              "reason": "T4、T5、T7 共同完整表达了恢复时间目标 45 分钟、尚未在更大库验证、且非实测结果。",
+              "quote": "恢复目标为 45 分钟"
+            },
+            {
+              "id": "F5",
+              "status": "covered",
+              "unitIds": [
+                "T6"
+              ],
+              "reason": "T6 完整准确表达了增量损坏时退回完整备份、数据损失可能超过 6 小时。",
+              "quote": "最后增量损坏时会退回较早完整备份，数据损失可能超过 6 小时"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "preserved",
+              "unitIds": [
+                "T1"
+              ],
+              "reason": "T1 完整保留了‘不代表数据库一定能够恢复’的否定约束。",
+              "quote": "备份上传成功不能代替恢复演练"
+            },
+            {
+              "id": "K2",
+              "status": "preserved",
+              "unitIds": [
+                "T5",
+                "T7"
+              ],
+              "reason": "T5 与 T7 共同保留了‘尚未在更大数据库上验证’的范围约束。",
+              "quote": "大库尚未验证"
+            },
+            {
+              "id": "K3",
+              "status": "preserved",
+              "unitIds": [
+                "T6"
+              ],
+              "reason": "T6 完整保留了‘不能保证任何情况下都只丢失 6 小时数据’的否定约束。",
+              "quote": "最后增量损坏时会退回较早完整备份，数据损失可能超过 6 小时"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要结构清晰，各要点表达明确，无跨段重复或冗余。"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 1
+        }
+      }
+    },
+    {
+      "id": "wrong-passkey-recovery",
+      "expected": "reject",
+      "passed": true,
+      "sample": {
+        "id": "passkeys",
+        "title": "通行密钥登录",
+        "article": "WebAuthn 登录时，服务器生成一次性 challenge。认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。私钥留在用户设备，不会发送给网站。若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+        "reference": "结论：WebAuthn 通过挑战签名验证身份，但不能消除账户恢复问题。\n要点：服务器生成一次性 challenge；认证器用私钥签名，服务器用已登记公钥验签；私钥留在设备，不发送给网站。\n风险：设备丢失时，用户需要事先配置的恢复方式。\n术语：challenge 是一次性挑战；私钥用于签名，公钥用于验证签名。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "WebAuthn 登录时，服务器生成一次性 challenge。"
+          },
+          {
+            "id": "S2",
+            "text": "认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。"
+          },
+          {
+            "id": "S3",
+            "text": "私钥留在用户设备，不会发送给网站。"
+          },
+          {
+            "id": "S4",
+            "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "WebAuthn 登录时，服务器生成一次性 challenge。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "私钥留在用户设备，不会发送给网站。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "私钥留在用户设备，不会发送给网站",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "用户需要事先配置的恢复方式",
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "通行密钥不能消除账户恢复问题",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      "summary": "结论：WebAuthn 能在设备丢失后自动恢复账户。\n要点：服务器发出 challenge，设备私钥签名，服务器公钥验签；私钥留在设备，不发送网站。\n风险：用户不必事先配置任何恢复方式，系统会自动恢复访问。\n术语：挑战是一次性验证信息；自动恢复是该方案内置且已验证的功能。",
+      "metrics": {
+        "score": 49,
+        "scorerVersion": 4,
+        "rawScore": 60.4,
+        "hardFailure": true,
+        "eligible": false,
+        "coverage": 0.75,
+        "accuracy": 0.5,
+        "constraintPreservation": 0.333,
+        "format": 1,
+        "characters": 131,
+        "lengthValid": true,
+        "dimensions": {
+          "accuracy": 20,
+          "completeness": 18.75,
+          "constraints": 6.67,
+          "clarity": 10,
+          "format": 5
+        },
+        "errors": [
+          {
+            "category": "contradicted",
+            "text": "WebAuthn 能在设备丢失后自动恢复账户",
+            "reason": "原文明确指出通行密钥不能消除账户恢复问题，设备丢失需要事先配置的恢复方式，与自动恢复相反",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "用户不必事先配置任何恢复方式，系统会自动恢复访问",
+            "reason": "原文S4明确要求用户需要事先配置的恢复方式，与不必配置、自动恢复相反",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+              }
+            ]
+          },
+          {
+            "category": "contradicted",
+            "text": "自动恢复是该方案内置且已验证的功能",
+            "reason": "原文S4指出通行密钥不能消除账户恢复问题，不存在内置自动恢复功能",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+              }
+            ]
+          },
+          {
+            "category": "wrong_fact",
+            "text": "WebAuthn 能在设备丢失后自动恢复账户",
+            "reason": "T1、T4、T6均错误声称存在自动恢复功能，与原文S4完全矛盾",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "用户不必事先配置任何恢复方式，系统会自动恢复访问",
+            "reason": "T4声称用户不必事先配置恢复方式，直接违反了原文要求事先配置的约束",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+              }
+            ]
+          },
+          {
+            "category": "violated_constraint",
+            "text": "WebAuthn 能在设备丢失后自动恢复账户",
+            "reason": "T1和T6声称存在自动恢复功能，直接违反了原文通行密钥不能消除账户恢复问题的约束",
+            "evidence": [
+              {
+                "id": "S4",
+                "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+              }
+            ]
+          }
+        ],
+        "missing": [],
+        "forbidden": [
+          "contradicted: 原文明确指出通行密钥不能消除账户恢复问题，设备丢失需要事先配置的恢复方式，与自动恢复相反",
+          "contradicted: 原文S4明确要求用户需要事先配置的恢复方式，与不必配置、自动恢复相反",
+          "contradicted: 原文S4指出通行密钥不能消除账户恢复问题，不存在内置自动恢复功能",
+          "wrong_fact: T1、T4、T6均错误声称存在自动恢复功能，与原文S4完全矛盾",
+          "violated_constraint: T4声称用户不必事先配置恢复方式，直接违反了原文要求事先配置的约束",
+          "violated_constraint: T1和T6声称存在自动恢复功能，直接违反了原文通行密钥不能消除账户恢复问题的约束"
+        ],
+        "judgment": {
+          "units": [
+            {
+              "id": "T1",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文明确指出通行密钥不能消除账户恢复问题，设备丢失需要事先配置的恢复方式，与自动恢复相反"
+            },
+            {
+              "id": "T2",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1",
+                "S2"
+              ],
+              "reason": "原文S1说明服务器生成challenge，S2说明认证器用私钥签名、服务器用公钥验签"
+            },
+            {
+              "id": "T3",
+              "verdict": "supported",
+              "sourceIds": [
+                "S3"
+              ],
+              "reason": "原文S3明确指出私钥留在用户设备，不会发送给网站"
+            },
+            {
+              "id": "T4",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文S4明确要求用户需要事先配置的恢复方式，与不必配置、自动恢复相反"
+            },
+            {
+              "id": "T5",
+              "verdict": "supported",
+              "sourceIds": [
+                "S1"
+              ],
+              "reason": "原文S1说明服务器生成一次性challenge，符合一次性验证信息的定义"
+            },
+            {
+              "id": "T6",
+              "verdict": "contradicted",
+              "sourceIds": [
+                "S4"
+              ],
+              "reason": "原文S4指出通行密钥不能消除账户恢复问题，不存在内置自动恢复功能"
+            }
+          ],
+          "facts": [
+            {
+              "id": "F1",
+              "status": "covered",
+              "unitIds": [
+                "T2",
+                "T5"
+              ],
+              "reason": "T2和T5准确表达了服务器生成一次性challenge的过程",
+              "quote": "服务器发出 challenge，设备私钥签名，服务器公钥验签"
+            },
+            {
+              "id": "F2",
+              "status": "covered",
+              "unitIds": [
+                "T2"
+              ],
+              "reason": "T2准确表达了认证器私钥签名、服务器公钥验签的核心流程",
+              "quote": "服务器发出 challenge，设备私钥签名，服务器公钥验签"
+            },
+            {
+              "id": "F3",
+              "status": "covered",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3准确表达了私钥留在设备、不发送网站的关键安全特性",
+              "quote": "私钥留在设备，不发送网站"
+            },
+            {
+              "id": "F4",
+              "status": "wrong",
+              "unitIds": [
+                "T1",
+                "T4",
+                "T6"
+              ],
+              "reason": "T1、T4、T6均错误声称存在自动恢复功能，与原文S4完全矛盾",
+              "quote": "WebAuthn 能在设备丢失后自动恢复账户"
+            }
+          ],
+          "constraints": [
+            {
+              "id": "K1",
+              "status": "preserved",
+              "unitIds": [
+                "T3"
+              ],
+              "reason": "T3完整准确地保留了私钥不离设备的约束条件",
+              "quote": "私钥留在设备，不发送网站"
+            },
+            {
+              "id": "K2",
+              "status": "violated",
+              "unitIds": [
+                "T4"
+              ],
+              "reason": "T4声称用户不必事先配置恢复方式，直接违反了原文要求事先配置的约束",
+              "quote": "用户不必事先配置任何恢复方式，系统会自动恢复访问"
+            },
+            {
+              "id": "K3",
+              "status": "violated",
+              "unitIds": [
+                "T1",
+                "T6"
+              ],
+              "reason": "T1和T6声称存在自动恢复功能，直接违反了原文通行密钥不能消除账户恢复问题的约束",
+              "quote": "WebAuthn 能在设备丢失后自动恢复账户"
+            }
+          ],
+          "clarity": {
+            "clear": true,
+            "nonRedundant": true,
+            "reason": "摘要结构清晰，各要点表达明确，无明显跨段重复或冗余"
+          }
+        },
+        "evaluator": {
+          "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "version": "semantic-v4.1-nemotron",
+          "attempts": 1
+        }
+      }
+    }
+  ]
+}
+

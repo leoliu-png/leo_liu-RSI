@@ -1,0 +1,60 @@
+{
+  "verificationType": "real-provider-failure",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "modelProfile": "openrouter-nemotron3-ultra",
+  "checkedAt": "2026-10-06T13:57:45.077Z",
+  "championVersion": "v1",
+  "legacyBaseline": {
+    "schemaVersion": 4,
+    "championVersion": "v1",
+    "score": 49,
+    "runId": "76eeaaf7-4da2-4b3f-91e9-09a423279268",
+    "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+    "evaluator": {
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "version": "semantic-v4.0",
+      "rubric": {
+        "accuracy": 40,
+        "completeness": 25,
+        "constraints": 20,
+        "clarity": 10,
+        "format": 5
+      }
+    },
+    "modelProfile": "legacy-workers-ai"
+  },
+  "run": {
+    "id": "929d1c64-6ecf-4ae8-bd3b-c18702f049db",
+    "schemaVersion": 4,
+    "scorerVersion": 4,
+    "date": "2026-10-06",
+    "status": "failed",
+    "startedAt": "2026-10-06T13:55:04.255Z",
+    "completedAt": "2026-10-06T13:55:35.143Z",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "modelProfile": "openrouter-nemotron3-ultra",
+    "provider": "OpenRouter",
+    "evaluator": {
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "version": "semantic-v4.1-nemotron"
+    },
+    "calibration": null,
+    "usage": {
+      "calls": 5,
+      "byModel": {
+        "nvidia/nemotron-3-ultra-550b-a55b:free": 5
+      },
+      "judgeCacheHits": 0,
+      "inputTokens": 1589,
+      "outputTokens": 924,
+      "transport": {
+        "attempts": 7,
+        "retries": 2,
+        "cost": 0,
+        "reportedCostCalls": 1
+      }
+    },
+    "error": "Semantic evaluation failed for http-cache: OpenRouter 503: Upstream error from Nvidia: Service temporarily overloaded"
+  }
+}
+
