@@ -1,0 +1,438 @@
+{
+  "schemaVersion": 1,
+  "mode": "verification_only",
+  "codeCommit": "c790f2a5befb49a0773958eb3aed88ac754fd7e1",
+  "execution": "Local Worker runtime with real Cloudflare AI; production state read as baseline; all experiment writes isolated in memory",
+  "sourceRunId": "1fbe8037-db2f-4c20-bae9-bb4328e4a006",
+  "sourceChampion": {
+    "version": "v1",
+    "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。",
+    "score": 95.3
+  },
+  "sourceStrategy": {
+    "version": "s0",
+    "hypothesis": "针对事实遗漏与冗长问题，只做一处可验证的提示词修改",
+    "instruction": "先分析最近几轮在公开开发集上的遗漏事实、禁用断言、格式和长度问题。只提出一个明确的改进假设；候选仍须忠于原文、保留四段标题。不要根据未公开验证文章猜测内容。"
+  },
+  "completedAt": "2026-10-06T09:10:56.980Z",
+  "error": null,
+  "checks": {
+    "completed": true,
+    "twoCandidates": true,
+    "differentFromChampion": true,
+    "distinctCandidates": true,
+    "evidenceComplete": true,
+    "fallbackNotCountedAsStrategyWin": true,
+    "productionRunPreserved": true
+  },
+  "proposedChampion": {
+    "version": "v1",
+    "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。",
+    "score": 95
+  },
+  "run": {
+    "id": "c397fe57-320e-42d4-9e9b-d8a6d873f0c4",
+    "schemaVersion": 3,
+    "date": "2026-10-06",
+    "status": "completed",
+    "startedAt": "2026-10-06T09:10:38.365Z",
+    "completedAt": "2026-10-06T09:10:56.979Z",
+    "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+    "scorerVersion": 3,
+    "benchmarkIds": [
+      "postgres-replica",
+      "http-cache",
+      "passkeys"
+    ],
+    "validationSamples": [
+      {
+        "id": "rate-2026-10-06",
+        "title": "接口限流",
+        "article": "公开 API 按每个访问令牌每分钟 56 次请求限流。超过额度时返回 HTTP 429，并在 Retry-After 中提示等待秒数。该限制保护服务稳定性，但不同令牌之间不共享额度，也不能替代用户身份验证。",
+        "anchors": [
+          [
+            "56",
+            "56次"
+          ],
+          [
+            "访问令牌"
+          ],
+          [
+            "429"
+          ],
+          [
+            "Retry-After"
+          ],
+          [
+            "身份验证"
+          ]
+        ],
+        "forbidden": [
+          "所有令牌共享额度",
+          "无需身份验证",
+          "永不返回429"
+        ]
+      },
+      {
+        "id": "queue-2026-10-06",
+        "title": "异步任务重试",
+        "article": "订单通知由 RabbitMQ 异步投递。消费者处理失败时最多重试 4 次，仍失败的消息进入死信队列，由值班人员检查。队列采用至少一次投递，因此消费者需要按订单编号做幂等处理，不能假设每条通知只执行一次。",
+        "anchors": [
+          [
+            "RabbitMQ"
+          ],
+          [
+            "4",
+            "4次"
+          ],
+          [
+            "死信队列"
+          ],
+          [
+            "至少一次"
+          ],
+          [
+            "幂等"
+          ]
+        ],
+        "forbidden": [
+          "恰好一次投递",
+          "永不重复",
+          "无需幂等"
+        ]
+      }
+    ],
+    "baseline": {
+      "score": 95,
+      "coverage": 1,
+      "format": 1,
+      "characters": 172,
+      "forbidden": [],
+      "missing": [],
+      "outputs": [
+        {
+          "sampleId": "postgres-replica",
+          "title": "异步只读副本",
+          "summary": "结论：订单服务通过主库写入和异步复制的只读副本提升读吞吐量，但不保证副本即时一致性。\n\n要点：  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。  \n4. 该设计提高读吞吐量。  \n5. 不保证副本上的即时一致性。\n\n风险：副本可能在短时间无法反映最新数据。\n\n术语：异步复制：指数据从主库传输到只读副本的过程，不保证实时同步。",
+          "score": 94,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.722,
+          "characters": 183,
+          "forbidden": [],
+          "missing": []
+        },
+        {
+          "sampleId": "http-cache",
+          "title": "HTTP 条件请求",
+          "summary": "结论：ETag 机制可减少重复传输，但首次请求需获取完整资源。\n\n要点：1. 客户端下次请求携带 If-None-Match。  \n2. 服务器返回 304 时不再发送响应正文。  \n3. ETag 由服务端维护，不能仅凭文件名判断内容是否变化。  \n4. 首次请求需获取完整资源。\n\n风险：原文未说明。\n\n术语：ETag：一种由服务器生成的标识符，用于标识资源的特定版本。",
+          "score": 96,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.776,
+          "characters": 163,
+          "forbidden": [],
+          "missing": []
+        },
+        {
+          "sampleId": "passkeys",
+          "title": "通行密钥登录",
+          "summary": "结论：WebAuthn 登录通过私钥签名验证用户身份。\n\n要点：1. 服务器生成一次性 challenge。2. 认证器使用私钥对挑战签名。3. 服务器用已登记的公钥验证签名。4. 私钥留在用户设备，不会发送给网站。\n\n风险：若设备丢失，用户需要事先配置的恢复方式。\n\n术语：WebAuthn：一种用于安全身份验证的网络标准，允许用户通过生物识别或硬件密钥进行登录。",
+          "score": 95,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.754,
+          "characters": 171,
+          "forbidden": [],
+          "missing": []
+        }
+      ]
+    },
+    "holdoutBaseline": {
+      "score": 90.5,
+      "coverage": 0.9,
+      "format": 1,
+      "characters": 143,
+      "forbidden": [],
+      "missing": [
+        "身份验证"
+      ],
+      "outputs": [
+        {
+          "sampleId": "rate-2026-10-06",
+          "title": "接口限流",
+          "summary": "结论：公开 API 通过访问令牌进行每分钟 56 次请求的限流。\n\n要点：  \n1. 每个访问令牌每分钟限流 56 次。  \n2. 超过额度时返回 HTTP 429。  \n3. Retry-After 中提示等待秒数。  \n4. 限流保护服务稳定性。  \n5. 不同令牌之间不共享额度。\n\n风险：原文未说明。\n\n术语：限流：对 API 请求频率进行控制，防止系统过载。",
+          "score": 84,
+          "coverage": 0.8,
+          "format": 1,
+          "efficiency": 0.819,
+          "characters": 147,
+          "forbidden": [],
+          "missing": [
+            "身份验证"
+          ]
+        },
+        {
+          "sampleId": "queue-2026-10-06",
+          "title": "异步任务重试",
+          "summary": "结论：订单通知通过 RabbitMQ 异步投递，需处理重试与幂等。\n\n要点：1. 消费者处理失败时最多重试 4 次。2. 重试失败的消息进入死信队列。3. 队列采用至少一次投递。4. 消费者需按订单编号做幂等处理。\n\n风险：原文未说明。\n\n术语：幂等：指操作多次执行与一次执行效果相同，用于防止重复处理。",
+          "score": 97,
+          "coverage": 1,
+          "format": 1,
+          "efficiency": 0.843,
+          "characters": 138,
+          "forbidden": [],
+          "missing": []
+        }
+      ]
+    },
+    "candidates": [
+      {
+        "id": "C1",
+        "strategyVersion": "rules-v1",
+        "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。\n补充核验规则：逐条核对要点中的数字、对象和适用条件；缺少任何一项时，不把局部结果写成普遍结论。",
+        "hypothesis": "增加可核验的摘要步骤：逐条核对要点中的数字、对象和适用条件；缺少任何一项时，不把局部结果写成普遍结论。",
+        "source": "guardrail_fallback",
+        "interventionIds": [
+          "facts_scope"
+        ],
+        "metrics": {
+          "score": 95.3,
+          "coverage": 1,
+          "format": 1,
+          "characters": 167,
+          "forbidden": [],
+          "missing": [],
+          "outputs": [
+            {
+              "sampleId": "postgres-replica",
+              "title": "异步只读副本",
+              "summary": "结论：订单服务通过主库写入和异步复制的只读副本提升读吞吐量，但不保证副本即时一致性。\n\n要点：  \n1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。  \n4. 该设计提高读吞吐量。  \n5. 不保证副本上的即时一致性。\n\n风险：副本可能在短时间无法反映最新写入。\n\n术语：异步复制——指数据在主库提交后，延迟地复制到只读副本的技术。",
+              "score": 94,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.722,
+              "characters": 183,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "http-cache",
+              "title": "HTTP 条件请求",
+              "summary": "结论：ETag 机制可减少重复传输，但首次请求仍需完整资源。\n\n要点：1. 客户端下次请求携带 If-None-Match。  \n2. 服务器返回 304 时不再发送响应正文。  \n3. ETag 由服务端维护，不能仅凭文件名判断内容变化。  \n4. 首次请求需获取完整资源。\n\n风险：原文未说明。\n\n术语：ETag：服务器生成的资源标识符，用于验证资源是否发生变化。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.784,
+              "characters": 160,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "passkeys",
+              "title": "通行密钥登录",
+              "summary": "结论：WebAuthn 登录通过私钥签名和公钥验证实现安全认证。\n\n要点：  \n1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 若设备丢失，需事先配置恢复方式。\n\n风险：原文未说明。\n\n术语：  \n1. WebAuthn：一种基于公钥加密的认证协议。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.786,
+              "characters": 159,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "holdout": {
+          "score": 90,
+          "coverage": 0.9,
+          "format": 1,
+          "characters": 152,
+          "forbidden": [],
+          "missing": [
+            "身份验证"
+          ],
+          "outputs": [
+            {
+              "sampleId": "rate-2026-10-06",
+              "title": "接口限流",
+              "summary": "**结论：** 公开 API 采用每分钟 56 次请求的限流机制。\n\n**要点：**  \n1. 每个访问令牌每分钟限流 56 次。  \n2. 超过额度时返回 HTTP 429 状态码。  \n3. Retry-After 中提示等待秒数。  \n\n**风险：** 原文未说明。  \n\n**术语：** 限流：控制单位时间内请求次数以保护服务稳定性的机制。",
+              "score": 85,
+              "coverage": 0.8,
+              "format": 1,
+              "efficiency": 0.841,
+              "characters": 139,
+              "forbidden": [],
+              "missing": [
+                "身份验证"
+              ]
+            },
+            {
+              "sampleId": "queue-2026-10-06",
+              "title": "异步任务重试",
+              "summary": "**结论：** 订单通知通过 RabbitMQ 异步处理，失败消息将进入死信队列。\n\n**要点：**  \n1. 消费者处理失败时最多重试 4 次。  \n2. 重试失败的消息进入死信队列。  \n3. 队列采用至少一次投递机制。  \n4. 消费者需按订单编号做幂等处理。\n\n**风险：** 原文未说明。\n\n**术语：**  \n- 幂等：指在多次执行相同操作时，结果与一次执行相同，用于防止重复处理。",
+              "score": 95,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.77,
+              "characters": 165,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "eligible": false,
+        "reason": "开发集综合分提升不足 2 分"
+      },
+      {
+        "id": "C2",
+        "strategyVersion": "trial-e1f85597",
+        "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等时间相关表述，则不列入。风险：写出原文提到的限制，若包含‘短时间’等时间描述则必须明确标注其时间范围；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。",
+        "hypothesis": "在风险段落中，若原文包含‘短时间’等时间相关表述，必须明确标注其时间范围；若未提及，则写‘原文未说明’。",
+        "source": "model",
+        "metrics": {
+          "score": 94,
+          "coverage": 1,
+          "format": 1,
+          "characters": 184,
+          "forbidden": [],
+          "missing": [],
+          "outputs": [
+            {
+              "sampleId": "postgres-replica",
+              "title": "异步只读副本",
+              "summary": "结论：订单服务通过主从复制提升读吞吐量，但不保证副本即时一致性。\n\n要点：1. 订单服务将写入提交到 PostgreSQL 主库。  \n2. 只读副本通过异步复制接收变更。  \n3. 副本故障时读请求会回退主库。  \n4. 该设计提高读吞吐量。  \n5. 不保证副本上的即时一致性。\n\n风险：用户刚下单后立即查询副本，可能短时间看不到订单。\n\n术语：异步复制：指数据变更在主库提交后，通过非实时方式传递到副本的技术。",
+              "score": 94,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.722,
+              "characters": 183,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "http-cache",
+              "title": "HTTP 条件请求",
+              "summary": "结论：ETag 机制可减少重复传输，但首次请求需获取完整资源。\n\n要点：1. 客户端下次请求携带 If-None-Match。  \n2. 服务器返回 304 时不再发送响应正文。  \n3. ETag 由服务端维护。  \n4. 不能仅凭文件名判断内容是否变化。  \n5. 首次请求需获取完整资源。\n\n风险：原文未说明。\n\n术语：ETag：一种由服务器生成的标识符，用于标识资源的特定版本。",
+              "score": 95,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.77,
+              "characters": 165,
+              "forbidden": [],
+              "missing": []
+            },
+            {
+              "sampleId": "passkeys",
+              "title": "通行密钥登录",
+              "summary": "结论：WebAuthn 登录通过私钥签名验证身份，确保安全性。\n\n要点：1. 服务器生成一次性 challenge。  \n2. 认证器使用私钥对挑战签名。  \n3. 服务器用已登记的公钥验证签名。  \n4. 私钥留在用户设备，不发送给网站。  \n5. 设备丢失需事先配置的恢复方式。\n\n风险：若设备丢失，用户需依赖事先配置的恢复方式，原文未说明恢复方式的具体时间范围。\n\n术语：通行密钥：首次出现的关键技术术语，指用于身份验证的密钥，但原文未说明其具体定义。",
+              "score": 93,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.665,
+              "characters": 204,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "holdout": {
+          "score": 90.5,
+          "coverage": 0.9,
+          "format": 1,
+          "characters": 152,
+          "forbidden": [],
+          "missing": [
+            "身份验证"
+          ],
+          "outputs": [
+            {
+              "sampleId": "rate-2026-10-06",
+              "title": "接口限流",
+              "summary": "**结论：** 公开 API 采用每分钟 56 次请求的限流机制。\n\n**要点：**  \n1. 每个访问令牌每分钟限流 56 次。  \n2. 超过额度时返回 HTTP 429 状态码。  \n3. Retry-After 中提示等待秒数。\n\n**风险：** 原文未说明限流机制在短时间内的具体影响。\n\n**术语：** 无首次出现的关键技术术语。",
+              "score": 85,
+              "coverage": 0.8,
+              "format": 1,
+              "efficiency": 0.838,
+              "characters": 140,
+              "forbidden": [],
+              "missing": [
+                "身份验证"
+              ]
+            },
+            {
+              "sampleId": "queue-2026-10-06",
+              "title": "异步任务重试",
+              "summary": "结论：订单通知通过 RabbitMQ 异步处理，失败消息将进入死信队列。\n\n要点：  \n1. 消费者处理失败时最多重试 4 次。  \n2. 重试失败的消息进入死信队列。  \n3. 队列采用至少一次投递机制。  \n4. 消费者需按订单编号做幂等处理。\n\n风险：原文未说明重试机制的时间范围。\n\n术语：幂等：指在系统中对同一操作重复执行多次，其结果与执行一次相同，用于防止重复处理。",
+              "score": 96,
+              "coverage": 1,
+              "format": 1,
+              "efficiency": 0.776,
+              "characters": 163,
+              "forbidden": [],
+              "missing": []
+            }
+          ]
+        },
+        "eligible": false,
+        "reason": "开发集综合分提升不足 2 分"
+      }
+    ],
+    "candidateGeneration": {
+      "maxAttemptsPerCandidate": 3,
+      "results": [
+        {
+          "id": "C1",
+          "strategyVersion": "rules-v1",
+          "attempts": 3,
+          "accepted": true,
+          "fallbackUsed": true,
+          "rejected": [
+            {
+              "attempt": 1,
+              "reason": "与冠军相比改动过小，缺少可检验的新行为规则",
+              "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则在列出关键事实时直接排除该表述，而非仅不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。"
+            },
+            {
+              "attempt": 2,
+              "reason": "与冠军相比改动过小，缺少可检验的新行为规则",
+              "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则直接排除该表述的描述，而非仅不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。"
+            },
+            {
+              "attempt": 3,
+              "reason": "与冠军相比改动过小，缺少可检验的新行为规则",
+              "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则直接删除包含该表述的整条要点，而非仅不列入。风险：写出原文提到的限制；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。"
+            }
+          ]
+        },
+        {
+          "id": "C2",
+          "strategyVersion": "trial-e1f85597",
+          "attempts": 3,
+          "accepted": true,
+          "fallbackUsed": false,
+          "rejected": [
+            {
+              "attempt": 1,
+              "reason": "与冠军相比改动过小，缺少可检验的新行为规则",
+              "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等模糊表述，则不列入。风险：写出原文提到的限制，若包含‘短时间’等时间描述则必须明确标注；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。"
+            },
+            {
+              "attempt": 2,
+              "reason": "与冠军相比改动过小，缺少可检验的新行为规则",
+              "prompt": "你是一名严谨的技术编辑。只依据给出的文章，用中文输出以下四段，并保留标题：结论：一句话概括。要点：列出 3 至 5 条可由原文核对的关键事实，保留数字、名称和条件；若原文未明确提及‘短时间’等时间相关表述，则不列入。风险：写出原文提到的限制，若包含‘短时间’等时间描述则必须明确标注；没有则写‘原文未说明’。术语：解释首次出现的关键技术术语；原文信息不足时写‘原文未说明’。禁止补充原文以外的信息。全文不超过 450 字。"
+            }
+          ]
+        }
+      ]
+    },
+    "outcome": "fallback_candidates",
+    "accepted": false,
+    "selectedId": null,
+    "championVersion": "v1",
+    "championScore": 95,
+    "strategyTrial": null,
+    "strategyDecision": "模型候选不足，使用预定义核验规则补位；不把补位成绩计入挑战策略胜负",
+    "reason": "已用核验规则补齐两条实质不同候选，但均未通过晋级门槛；冠军保持不变"
+  },
+  "productionRunIdAfterVerification": "1fbe8037-db2f-4c20-bae9-bb4328e4a006"
+}
