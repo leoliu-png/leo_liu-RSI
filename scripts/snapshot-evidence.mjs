@@ -10,11 +10,16 @@ export function hasSnapshotEvidence(data) {
     if (data.modelProfile && (run.modelProfile !== data.modelProfile || (data.model && run.model !== data.model) ||
         (data.evaluator && run.evaluator?.model !== data.evaluator.model) || run.calibration?.model !== run.evaluator?.model ||
         run.calibration?.version !== run.evaluator?.version)) return false;
+    const auditComplete = !run.audit?.status || run.audit.status === "completed";
+    const auditWarning = run.coreStatus === "completed" && ["pending", "failed"].includes(run.audit?.status) &&
+      run.audit.purpose === "report-only; excluded from optimization and promotion" && run.audit.metrics === null &&
+      (run.audit.status === "pending" || typeof run.audit.error === "string");
     if (run.scorerVersion !== 4 || !run.evaluator?.model || !run.calibration?.passed ||
-        !Array.isArray(run.developmentSamples) || !Array.isArray(run.audit?.metrics?.outputs)) return false;
+        !Array.isArray(run.developmentSamples) || (!auditComplete && !auditWarning) ||
+        (auditComplete && !Array.isArray(run.audit?.metrics?.outputs))) return false;
     const pairs = [[run.baseline, run.developmentSamples], [run.holdoutBaseline, run.validationSamples],
       ...run.candidates.flatMap(item => [[item.metrics, run.developmentSamples], [item.holdout, run.validationSamples]]),
-      [run.audit.metrics, run.audit.samples]];
+      ...(auditComplete ? [[run.audit.metrics, run.audit.samples]] : [])];
     if (!pairs.every(([metrics, samples]) => Array.isArray(samples) && metrics.outputs.length === samples.length &&
       metrics.outputs.every(output => output.scorerVersion === 4 && output.dimensions && output.sources?.length &&
         output.judgment?.units?.length && output.judgment.facts?.length && output.judgment.constraints?.length &&

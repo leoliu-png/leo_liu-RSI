@@ -3,6 +3,7 @@ import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, va
 import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
 import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
+import { openJournal, runError, DAILY_CALL_LIMIT } from "./journal.js";
 
 export const STATE_KEY = `rsi:v4:${MODEL_PROFILE}:state`;
 export const RUN_PREFIX = `rsi:v4:${MODEL_PROFILE}:run:`;
@@ -161,17 +162,23 @@ function historicalFeedback(state) {
 }
 
 async function generateStrategy(ai, state) {
-  const response = await ai.run(modelName, {
-    messages: [
+  const messages = [
       { role: "system", content: "你研究如何更有效地产生技术摘要提示词候选。只返回 JSON，不能改变摘要任务、评分规则或候选必须忠于原文的约束。" },
       { role: "user", content: `当前生成策略：\n${state.strategy.instruction}\n\n最近开发集失败证据：\n${historicalFeedback(state)}\n\n提出一条不同且可检验的生成候选策略，重点解决多轮反复出现的问题。只返回 {"hypothesis":"为什么这条策略会更好","instruction":"给候选提示词生成器的具体操作指令"}。不要请求或猜测未公开验证文章。` }
-    ],
-    max_tokens: 650,
-    temperature: 0.65
-  });
-  const challenger = parseStrategy(extractText(response));
-  if (challenger.instruction === state.strategy.instruction) throw new Error("Strategy proposal did not change");
-  return challenger;
+    ];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await ai.run(modelName, { messages, max_tokens: 1000, temperature: 0.65 });
+    const raw = extractText(response);
+    try {
+      const challenger = parseStrategy(raw);
+      if (challenger.instruction === state.strategy.instruction) throw new Error("Strategy proposal did not change");
+      return challenger;
+    } catch (error) {
+      if (attempt) throw runError(`Strategy JSON repair exhausted: ${error.message}`, "strategy_structure");
+      messages.push({ role: "assistant", content: raw }, { role: "user", content:
+        `格式校验失败：${error.message}。只修复并返回完整 JSON：hypothesis 非空，instruction 为60—700字符，不得改变摘要任务或评分规则。` });
+    }
+  }
 }
 
 async function generateCandidate(ai, champion, strategy, feedback, id, excludedPrompts = [], focus = "事实、条件和证据核对") {
@@ -211,12 +218,20 @@ function fallbackCandidate(champion, id, occupied, sameDayPrompt) {
   return null;
 }
 
-async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts, seenKeys, sameDayPrompt = null, focus) {
+async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occupiedPrompts, seenKeys, sameDayPrompt = null, focus, onProposal = async () => {}) {
   const excluded = [...occupiedPrompts];
   const occupied = new Set([...excluded.map(clean), ...seenKeys]);
   const rejected = [];
   for (let attempt = 1; attempt <= MAX_CANDIDATE_ATTEMPTS; attempt++) {
-    const candidate = await generateCandidate(ai, champion, strategy, feedback, id, excluded, focus);
+    let candidate;
+    try {
+      candidate = await generateCandidate(ai, champion, strategy, feedback, id, excluded, focus);
+    } catch (error) {
+      if (error.providerFailure || error.code) throw error;
+      rejected.push({ attempt, reason: `候选结构不合法：${error.message}`, prompt: "" });
+      continue;
+    }
+    await onProposal(candidate.prompt);
     const normalized = clean(candidate.prompt);
     const reason = occupied.has(normalized) ? "与冠军、历史候选或当日已接受候选重复"
       : !hasSubstantiveChange(candidate.prompt, champion) ? "与冠军相比改动过小，缺少可检验的新行为规则"
@@ -227,12 +242,15 @@ async function generateUniqueCandidate(ai, champion, strategy, feedback, id, occ
     occupied.add(normalized);
   }
   const fallback = fallbackCandidate(champion, id, occupied, sameDayPrompt);
+  if (fallback) await onProposal(fallback.prompt);
   return { candidate: fallback, attempts: MAX_CANDIDATE_ATTEMPTS, rejected, fallbackUsed: Boolean(fallback) };
 }
 
-async function runPrompt(context, prompt, samples) {
-  const outputs = await Promise.all(samples.map(async sample => {
-    const response = await context.ai.run(modelName, {
+async function runPrompt(context, prompt, samples, label) {
+  const outputs = [];
+  for (const sample of samples) {
+    const work = async () => {
+    const response = await context.journal.task(`summary:${label}:${sample.id}`, () => context.ai.run(modelName, {
       messages: [
         { role: "system", content: prompt },
         { role: "user", content: `请根据下文完成任务。只输出摘要。\n\n${sample.article}` }
@@ -240,11 +258,13 @@ async function runPrompt(context, prompt, samples) {
       max_tokens: 800,
       temperature: 0,
       seed: 42
-    });
+    }));
     const summary = extractText(response);
     return { sampleId: sample.id, title: sample.title, summary, sources: sample.sources,
       ...await judgeSummary(context, sample, summary) };
-  }));
+    };
+    outputs.push(await context.journal.task(`output:${label}:${sample.id}`, work));
+  }
   return aggregateOutputs(outputs);
 }
 
@@ -383,128 +403,233 @@ export function developmentFeedback(metrics, samples) {
   };
 }
 
-export async function runEvolution(env, timestamp = Date.now(), modelClient = createModelClient(env)) {
+export async function runEvolution(env, timestamp = Date.now(), modelClient, options = {}) {
   const date = experimentDate(timestamp);
-  const state = await getState(env);
-  if (state.latestRun?.date === date && state.latestRun.status === "completed") return { skipped: true, state };
-  const startedAt = new Date().toISOString();
-  const context = createEvaluationContext(modelClient, DEFAULT_JUDGE_MODEL);
-  let calibration = null;
-  try {
-    calibration = await calibrateEvaluator(context, env.EVOLUTION);
-    if (!calibration.passed) throw new Error(`Evaluator calibration rejected: ${calibration.results.filter(item => !item.passed).map(item => item.id).join(", ")}`);
-    const developmentSamples = developmentForDate(date);
-    const validationSamples = validationForDate(date);
-    const [baseline, holdoutBaseline] = await Promise.all([
-      runPrompt(context, state.champion.prompt, developmentSamples),
-      runPrompt(context, state.champion.prompt, validationSamples)
-    ]);
-    const baselineFeedback = developmentFeedback(baseline, developmentSamples);
-    const proposalState = { ...state, feedbackHistory: [...state.feedbackHistory,
-      { date, baseline: baselineFeedback, instruction: "基于具体错误或遗漏改进；分项已满分时不要重复添加相同要求" }] };
-    const challenger = state.challenger || await generateStrategy(context.ai, proposalState);
-    const workingState = { ...state, challenger };
-    const feedback = historicalFeedback(proposalState);
-    const focus = ["事实、数字、否定及适用条件", "信息完整性和术语/风险边界", "跨段重复与表达清晰度"]
-      [Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000) % 3];
-    const occupiedPrompts = [state.champion.prompt, ...(state.recentCandidatePrompts || []).slice(-10)];
-    const seenKeys = state.seenCandidateKeys || [];
-    const first = await generateUniqueCandidate(context.ai, state.champion.prompt, state.strategy, feedback, "C1", occupiedPrompts, seenKeys, null, focus);
-    const second = await generateUniqueCandidate(context.ai, state.champion.prompt, challenger, feedback, "C2",
-      first.candidate ? [...occupiedPrompts, first.candidate.prompt] : occupiedPrompts,
-      seenKeys, first.candidate?.prompt, focus);
-    const candidates = [first.candidate, second.candidate].filter(Boolean);
-    const candidateGeneration = {
-      maxAttemptsPerCandidate: MAX_CANDIDATE_ATTEMPTS,
-      results: [
-        { id: "C1", strategyVersion: first.candidate?.strategyVersion || state.strategy.version, attempts: first.attempts, accepted: Boolean(first.candidate), fallbackUsed: first.fallbackUsed, rejected: first.rejected },
-        { id: "C2", strategyVersion: second.candidate?.strategyVersion || challenger.version || `trial-${challenger.id.slice(0, 8)}`, attempts: second.attempts, accepted: Boolean(second.candidate), fallbackUsed: second.fallbackUsed, rejected: second.rejected }
-      ]
-    };
-    const evaluated = [];
-    for (const item of candidates) {
-      const [metrics, holdout] = await Promise.all([
-        runPrompt(context, item.prompt, developmentSamples),
-        runPrompt(context, item.prompt, validationSamples)
-      ]);
-      const result = promotionDecision({ metrics, holdout }, baseline, holdoutBaseline);
-      evaluated.push({ ...item, focus, metrics, holdout, ...result });
+  let published = await getState(env);
+  const previous = published.latestRun;
+  if (previous?.date === date && previous.status === "completed" &&
+      previous.evaluator?.version === EVALUATOR_VERSION &&
+      (!previous.audit?.status || previous.audit.status === "completed" || previous.audit.retryable === false)) {
+    return { skipped: true, state: published };
+  }
+  const safeKV = { get: (...args) => env.EVOLUTION.get(...args), put: (key, value, putOptions) =>
+    env.EVOLUTION.put(key, env.MODEL_API_KEY ? value.split(env.MODEL_API_KEY).join("[REDACTED]") : value, putOptions) };
+  const journal = await openJournal(safeKV, date, published);
+  const cp = journal.checkpoint, state = cp.baseState;
+  const executionStarted = Date.now();
+  const execution = { startedAt: new Date().toISOString(), status: "running", fromStage: cp.stage };
+  cp.attempts.push(execution);
+  const client = modelClient || createModelClient(env, {
+    initialStats: cp.usage?.transport, maxAttempts: DAILY_CALL_LIMIT,
+    onAttempt: async stats => { cp.usage.transport = stats; await journal.save(); }
+  });
+  const context = createEvaluationContext(client, DEFAULT_JUDGE_MODEL, DAILY_CALL_LIMIT, {
+    initialUsage: cp.usage,
+    beforeCall() {
+      if (Date.now() - executionStarted > (options.executionWindowMs ?? 600000) - 200000) {
+        throw runError("Execution slice finished; continue from checkpoint", "execution_slice", true);
+      }
+    },
+    async onUsage(usage) { cp.usage = usage; await journal.save(); }
+  });
+  context.journal = journal;
+  cp.usage = context.usage;
+  const developmentSamples = developmentForDate(date), validationSamples = validationForDate(date);
+  const progress = () => ({ stage: cp.stage, completedTasks: Object.values(cp.tasks).filter(item => item.status === "completed").length,
+    calls: context.usage.calls, callLimit: DAILY_CALL_LIMIT, resumable: true });
+  const rawEvidence = () => Object.entries(cp.tasks).filter(([key, item]) => key.includes(":response:") && item.status === "completed")
+    .slice(-8).map(([step, item]) => ({ step, response: item.value }));
+  const metadata = () => ({
+    id: cp.id, schemaVersion: 4, scorerVersion: SCORER_VERSION, date, startedAt: cp.startedAt,
+    model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER,
+    evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC },
+    datasetVersion: DATASET_VERSION, usage: context.usage, progress: progress(), attempts: cp.attempts,
+    developmentSamples, validationSamples, candidates: []
+  });
+  const persist = async next => {
+    if (env.EVOLUTION.commit) {
+      const entries = [[`${RUN_PREFIX}${date}`, JSON.stringify(next.latestRun)], [STATE_KEY, JSON.stringify(next)]]
+        .map(([key, value]) => [key, env.MODEL_API_KEY ? value.split(env.MODEL_API_KEY).join("[REDACTED]") : value]);
+      await env.EVOLUTION.commit(entries);
+    } else {
+      await safeKV.put(`${RUN_PREFIX}${date}`, JSON.stringify(next.latestRun));
+      await safeKV.put(STATE_KEY, JSON.stringify(next));
     }
-    const winner = evaluated.filter(item => item.eligible)
-      .sort((a, b) => b.metrics.score - a.metrics.score || b.holdout.score - a.holdout.score)[0];
-    const generation = state.generation + (winner ? 1 : 0);
-    const champion = winner
-      ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score, scorerVersion: SCORER_VERSION }
-      : { ...state.champion, score: baseline.score, scorerVersion: SCORER_VERSION };
-    const pairedModelCandidates = evaluated.length === 2 && evaluated.every(item => item.source === "model");
-    const strategyResult = pairedModelCandidates
-      ? updateStrategyTrial(workingState, date, evaluated[0], evaluated[1])
-      : {
-          trial: null, strategy: state.strategy, challenger: null, strategyGeneration: state.strategyGeneration,
-          decision: evaluated.length === 2
-            ? "模型候选不足，使用预定义核验规则补位；不把补位成绩计入挑战策略胜负"
-            : "候选去重及核验规则补位后仍不足两条；不计策略胜负，回退未完成配对的挑战策略"
+    published = next;
+  };
+  const baselineFeedback = () => cp.tasks["measure:baseline:dev"]?.value
+    ? developmentFeedback(cp.tasks["measure:baseline:dev"].value, developmentSamples) : null;
+  const feedbackRecord = () => ({
+    runId: cp.id, date, incomplete: !cp.core, baseline: baselineFeedback(),
+    candidates: ["C1", "C2"].flatMap(id => {
+      const metrics = cp.tasks[`measure:${id}:dev`]?.value;
+      const candidate = cp.tasks[`generate:${id}`]?.value?.candidate;
+      return metrics && candidate ? [{ id, hypothesis: candidate.hypothesis,
+        improvement: baselineFeedback() ? Number((metrics.score - baselineFeedback().score).toFixed(1)) : null,
+        development: developmentFeedback(metrics, developmentSamples) }] : [];
+    }),
+    rejectedCandidates: ["C1", "C2"].flatMap(id => {
+      const value = cp.tasks[`generate:${id}`]?.value;
+      return value ? [{ id, attempts: value.attempts, rejected: value.rejected.length }] : [];
+    })
+  });
+  const learnedState = base => ({
+    ...base,
+    seenCandidateKeys: [...new Set([...(base.seenCandidateKeys || []), ...(cp.proposedPrompts || []).map(clean)])],
+    recentCandidatePrompts: [...new Set([...(base.recentCandidatePrompts || []), ...(cp.proposedPrompts || [])])].slice(-10),
+    feedbackHistory: baselineFeedback()
+      ? [...(base.feedbackHistory || []).filter(record => record.runId !== cp.id), feedbackRecord()].slice(-10)
+      : base.feedbackHistory || []
+  });
+  const mark = async stage => {
+    await journal.stage(stage);
+    if (!cp.core) await persist({ ...learnedState(published), latestRun: { ...metadata(), status: "running",
+      calibration: cp.tasks.calibration?.value || null }, updatedAt: new Date().toISOString() });
+  };
+  const measure = (label, prompt, samples) =>
+    journal.task(`measure:${label}`, () => runPrompt(context, prompt, samples, label));
+  const reserveProposal = async prompt => {
+    cp.proposedPrompts = [...new Set([...(cp.proposedPrompts || []), prompt])];
+    await journal.save();
+    await persist({ ...learnedState(published), latestRun: { ...metadata(), status: "running",
+      calibration: cp.tasks.calibration?.value || null }, updatedAt: new Date().toISOString() });
+  };
+  try {
+    if (!cp.core) {
+      await mark("calibration");
+      const calibration = await journal.task("calibration", () => calibrateEvaluator(context, safeKV));
+      if (!calibration.passed) throw runError(
+        `Evaluator calibration rejected: ${calibration.results.filter(item => !item.passed).map(item => item.id).join(", ")}`,
+        "calibration_rejected");
+      await mark("baseline-development");
+      const baseline = await measure("baseline:dev", state.champion.prompt, developmentSamples);
+      await mark("baseline-validation");
+      const holdoutBaseline = await measure("baseline:validation", state.champion.prompt, validationSamples);
+      const proposalState = { ...state, feedbackHistory: [...state.feedbackHistory,
+        { date, baseline: baselineFeedback(), instruction: "基于具体错误或遗漏改进；分项已满分时不要重复添加相同要求" }] };
+      await mark("strategy-proposal");
+      const challenger = await journal.task("challenger", () => state.challenger ||
+        generateStrategy(journal.ai("strategy", context.ai), proposalState));
+      const workingState = { ...state, challenger };
+      const feedback = historicalFeedback(proposalState);
+      const focus = ["事实、数字、否定及适用条件", "信息完整性和术语/风险边界", "跨段重复与表达清晰度"]
+        [Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000) % 3];
+      const occupiedPrompts = [state.champion.prompt, ...(state.recentCandidatePrompts || []).slice(-10)];
+      const seenKeys = state.seenCandidateKeys || [];
+      await mark("candidate-C1");
+      const first = await journal.task("generate:C1", () => generateUniqueCandidate(
+        journal.ai("proposal:C1", context.ai), state.champion.prompt, state.strategy, feedback, "C1",
+        occupiedPrompts, seenKeys, null, focus, reserveProposal));
+      await mark("candidate-C2");
+      const second = await journal.task("generate:C2", () => generateUniqueCandidate(
+        journal.ai("proposal:C2", context.ai), state.champion.prompt, challenger, feedback, "C2",
+        first.candidate ? [...occupiedPrompts, first.candidate.prompt] : occupiedPrompts,
+        seenKeys, first.candidate?.prompt, focus, reserveProposal));
+      const candidateGeneration = { maxAttemptsPerCandidate: MAX_CANDIDATE_ATTEMPTS, results: [first, second].map((item, index) => ({
+        id: `C${index + 1}`, strategyVersion: item.candidate?.strategyVersion || (index ? `trial-${challenger.id.slice(0, 8)}` : state.strategy.version),
+        attempts: item.attempts, accepted: Boolean(item.candidate), fallbackUsed: item.fallbackUsed, rejected: item.rejected
+      })) };
+      const evaluated = [];
+      for (const item of [first.candidate, second.candidate].filter(Boolean)) {
+        await mark(`evaluate-${item.id}-development`);
+        const metrics = await measure(`${item.id}:dev`, item.prompt, developmentSamples);
+        await mark(`evaluate-${item.id}-validation`);
+        const holdout = await measure(`${item.id}:validation`, item.prompt, validationSamples);
+        evaluated.push({ ...item, focus, metrics, holdout, ...promotionDecision({ metrics, holdout }, baseline, holdoutBaseline) });
+      }
+      const winner = evaluated.filter(item => item.eligible)
+        .sort((a, b) => b.metrics.score - a.metrics.score || b.holdout.score - a.holdout.score)[0];
+      const generation = state.generation + (winner ? 1 : 0);
+      const champion = winner
+        ? { version: `v${generation}`, prompt: winner.prompt, score: winner.metrics.score, scorerVersion: SCORER_VERSION }
+        : { ...state.champion, score: baseline.score, scorerVersion: SCORER_VERSION };
+      const paired = evaluated.length === 2 && evaluated.every(item => item.source === "model");
+      const strategyResult = paired ? updateStrategyTrial(workingState, date, evaluated[0], evaluated[1]) : {
+        trial: null, strategy: state.strategy, challenger: null, strategyGeneration: state.strategyGeneration,
+        decision: evaluated.length === 2 ? "模型候选不足，使用预定义核验规则补位；不把补位成绩计入挑战策略胜负"
+          : "候选去重及核验规则补位后仍不足两条；不计策略胜负，回退未完成配对的挑战策略"
+      };
+      const outcome = paired ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
+        : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
+      const audit = state.lastAudit?.championVersion === champion.version &&
+        state.lastAudit.evaluatorVersion === EVALUATOR_VERSION ? state.lastAudit : {
+          championVersion: champion.version, scorerVersion: SCORER_VERSION, modelProfile: MODEL_PROFILE,
+          evaluatorVersion: EVALUATOR_VERSION, status: "pending", retryable: true,
+          purpose: "report-only; excluded from optimization and promotion", samples: auditCorpus, metrics: null
         };
-    const outcome = pairedModelCandidates ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
-      : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
-    const audit = state.lastAudit?.championVersion === champion.version && state.lastAudit?.scorerVersion === SCORER_VERSION && state.lastAudit?.modelProfile === MODEL_PROFILE
-      ? state.lastAudit : { championVersion: champion.version, scorerVersion: SCORER_VERSION, modelProfile: MODEL_PROFILE,
-          checkedAt: new Date().toISOString(), purpose: "report-only; excluded from optimization and promotion",
-          samples: auditCorpus, metrics: await runPrompt(context, champion.prompt, auditCorpus) };
-    const run = {
-      id: crypto.randomUUID(), schemaVersion: 4, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
-      model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER, scorerVersion: SCORER_VERSION,
-      evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC }, datasetVersion: DATASET_VERSION,
-      calibration, usage: context.usage, audit,
-      strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: MODEL_SUPPORTS_SEED ? 42 : null,
-        seedSupported: MODEL_SUPPORTS_SEED, evaluationTemperature: 0 },
-      benchmarkIds: developmentSamples.map(item => item.id), developmentSamples, validationSamples,
-      baseline, holdoutBaseline, candidates: evaluated, candidateGeneration, outcome,
-      accepted: Boolean(winner), selectedId: winner?.id ?? null,
-      championVersion: champion.version, championScore: champion.score,
-      strategyTrial: strategyResult.trial, strategyDecision: strategyResult.decision,
-      reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛${pairedModelCandidates ? "" : "；策略配对未完成或未计分"}`
-        : outcome === "generation_exhausted" ? "模型和核验规则库均未得到有效新 Prompt；仅完成冠军基线测评，冠军保持不变"
-        : outcome === "partial_candidates" ? "仅一条实质不同候选通过验证；未完成策略配对，冠军保持不变"
-        : outcome === "fallback_candidates" ? "已用核验规则补齐两条实质不同候选，但均未通过晋级门槛；冠军保持不变"
-        : "所有候选未同时通过开发集与新文章验证；冠军保持不变"
-    };
-    const feedbackRecord = {
-      date, baseline: baselineFeedback, candidates: evaluated.map(item => ({
-        id: item.id, hypothesis: item.hypothesis, improvement: Number((item.metrics.score - baseline.score).toFixed(1)),
-        development: developmentFeedback(item.metrics, developmentSamples)
-      })), rejectedCandidates: candidateGeneration.results.map(item => ({ id: item.id, attempts: item.attempts, rejected: item.rejected.length }))
-    };
-    const next = {
-      ...state, schemaVersion: 4, scorerVersion: SCORER_VERSION, generation, champion, lastAudit: audit,
-      strategyGeneration: strategyResult.strategyGeneration, strategy: strategyResult.strategy,
-      challenger: strategyResult.challenger,
-      strategyHistory: strategyResult.trial ? [...state.strategyHistory, strategyResult.trial].slice(-30) : state.strategyHistory,
-      feedbackHistory: [...state.feedbackHistory, feedbackRecord].slice(-10),
-      recentCandidatePrompts: [...(state.recentCandidatePrompts || []), ...evaluated.map(item => item.prompt)].slice(-10),
-      seenCandidateKeys: [...seenKeys, ...evaluated.map(item => clean(item.prompt))],
-      latestRun: run,
-      history: [...state.history, {
-        date, scorerVersion: SCORER_VERSION, modelProfile: MODEL_PROFILE, generation, score: champion.score,
-        holdoutScore: winner?.holdout.score ?? holdoutBaseline.score,
-        accepted: Boolean(winner), focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "补位候选未晋级"),
-        strategy: strategyResult.strategy.version
-      }].slice(-30),
-      updatedAt: run.completedAt
-    };
-    await env.EVOLUTION.put(`${RUN_PREFIX}${date}`, JSON.stringify(run));
-    await env.EVOLUTION.put(STATE_KEY, JSON.stringify(next));
-    return { skipped: false, state: next };
+      const run = {
+        ...metadata(), status: "completed", coreStatus: "completed", completedAt: new Date().toISOString(),
+        calibration, audit, benchmarkIds: developmentSamples.map(item => item.id),
+        strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: MODEL_SUPPORTS_SEED ? 42 : null,
+          seedSupported: MODEL_SUPPORTS_SEED, evaluationTemperature: 0 },
+        baseline, holdoutBaseline, candidates: evaluated, candidateGeneration, outcome,
+        accepted: Boolean(winner), selectedId: winner?.id ?? null, championVersion: champion.version, championScore: champion.score,
+        strategyTrial: strategyResult.trial, strategyDecision: strategyResult.decision,
+        reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛${paired ? "" : "；策略配对未完成或未计分"}`
+          : outcome === "generation_exhausted" ? "未得到有效新 Prompt；仅完成冠军基线测评，冠军保持不变"
+          : outcome === "partial_candidates" ? "候选不足两条；仅通过全部晋级门槛的候选可替换冠军，不计策略胜负"
+          : outcome === "fallback_candidates" ? "规则补位候选未通过晋级门槛；冠军保持不变"
+          : "所有候选未同时通过开发集与新文章验证；冠军保持不变"
+      };
+      cp.core = { ...learnedState(state), schemaVersion: 4, scorerVersion: SCORER_VERSION, generation, champion,
+        lastAudit: audit.status === "completed" ? audit : state.lastAudit, latestRun: run,
+        strategyGeneration: strategyResult.strategyGeneration, strategy: strategyResult.strategy, challenger: strategyResult.challenger,
+        strategyHistory: strategyResult.trial ? [...state.strategyHistory, strategyResult.trial].slice(-30) : state.strategyHistory,
+        history: [...state.history, { date, scorerVersion: SCORER_VERSION, modelProfile: MODEL_PROFILE, generation,
+          score: champion.score, holdoutScore: winner?.holdout.score ?? holdoutBaseline.score, accepted: Boolean(winner),
+          focus: winner?.hypothesis ?? (outcome === "evaluated" ? "保持冠军" : "补位候选未晋级"), strategy: strategyResult.strategy.version }].slice(-30),
+        updatedAt: run.completedAt };
+      cp.core = learnedState(cp.core);
+      await journal.save();
+    }
+    // Replaying this exact snapshot is idempotent across a process interruption.
+    await persist(cp.core);
+    await journal.stage("audit");
+    if (cp.core.latestRun.audit.status !== "completed" && cp.core.latestRun.audit.retryable !== false) {
+      try {
+        const metrics = await measure("audit", cp.core.champion.prompt, auditCorpus);
+        cp.core.latestRun.audit = { ...cp.core.latestRun.audit, status: "completed", retryable: false,
+          error: null, checkedAt: new Date().toISOString(), metrics };
+        cp.core.lastAudit = cp.core.latestRun.audit;
+      } catch (error) {
+        await context.cancel();
+        cp.core.latestRun.audit = { ...cp.core.latestRun.audit, status: "failed",
+          error: redactError(error.message, env.MODEL_API_KEY), code: error.code || "audit_error",
+          retryable: error.retryable !== false, retryAfterMs: error.retryAfterMs || 0, metrics: null,
+          failureEvidence: rawEvidence(),
+          partialOutputs: Object.entries(cp.tasks).filter(([key, item]) => key.startsWith("output:audit:") && item.status === "completed")
+            .map(([, item]) => item.value) };
+      }
+    }
+    execution.status = cp.core.latestRun.audit.status === "completed" ? "completed" : "audit_pending";
+    execution.completedAt = new Date().toISOString();
+    cp.core.latestRun.usage = context.usage;
+    cp.core.latestRun.attempts = cp.attempts;
+    cp.core.latestRun.progress = progress();
+    await journal.save();
+    await persist(cp.core);
+    return { skipped: false, state: published };
   } catch (error) {
     await context.cancel();
-    const message = redactError(error instanceof Error ? error.message : String(error), env.MODEL_API_KEY);
-    const run = { id: crypto.randomUUID(), schemaVersion: 4, scorerVersion: SCORER_VERSION, date, status: "failed", startedAt,
-      completedAt: new Date().toISOString(), model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER, evaluator: { model: context.model, version: EVALUATOR_VERSION },
-      calibration, usage: context.usage, error: message };
-    const next = { ...state, latestRun: run, updatedAt: run.completedAt };
-    await env.EVOLUTION.put(`${RUN_PREFIX}${date}`, JSON.stringify(run));
-    await env.EVOLUTION.put(STATE_KEY, JSON.stringify(next));
-    console.error(JSON.stringify({ message: "evolution_failed", date, error: message }));
+    const message = redactError(error.message, env.MODEL_API_KEY);
+    execution.status = error.code === "execution_slice" ? "paused" : "failed";
+    execution.completedAt = new Date().toISOString();
+    execution.error = message;
+    execution.code = error.code || "execution_error";
+    const run = { ...metadata(), status: execution.status, completedAt: execution.completedAt, error: message,
+      code: execution.code, retryable: error.retryable !== false, retryAfterMs: error.retryAfterMs || 0,
+      calibration: cp.tasks.calibration?.value || null, baseline: cp.tasks["measure:baseline:dev"]?.value,
+      holdoutBaseline: cp.tasks["measure:baseline:validation"]?.value,
+      candidateGeneration: { maxAttemptsPerCandidate: MAX_CANDIDATE_ATTEMPTS,
+        results: ["C1", "C2"].flatMap(id => cp.tasks[`generate:${id}`]?.value
+          ? [{ id, ...cp.tasks[`generate:${id}`].value }] : []) },
+      proposals: cp.proposedPrompts || [],
+      failureEvidence: rawEvidence(),
+      partialEvidence: Object.entries(cp.tasks).filter(([key, item]) => key.startsWith("output:") && item.status === "completed")
+        .map(([key, item]) => ({ step: key, ...item.value })) };
+    await journal.save();
+    await persist({ ...learnedState(published), latestRun: run, updatedAt: run.completedAt });
+    console.error(JSON.stringify({ message: "evolution_interrupted", date, stage: cp.stage, code: run.code, error: message }));
     throw error;
   }
 }

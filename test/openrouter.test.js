@@ -88,3 +88,26 @@ test("a provider outage is not retried again as a judge JSON repair", async () =
   await context.cancel();
   await assert.rejects(context.ai.run(MODEL_NAME, input), /canceled/);
 });
+
+test("a transient network failure receives one bounded retry", async () => {
+  let requests = 0;
+  const client = createModelClient(env, options(async () => {
+    if (++requests === 1) throw new TypeError("fetch failed");
+    return good();
+  }));
+  await client.run(MODEL_NAME, input);
+  assert.equal(requests, 2);
+  assert.equal(client.stats.retries, 1);
+});
+
+test("HTML auth errors are terminal and restored HTTP budgets are not reset", async () => {
+  let requests = 0;
+  const client = createModelClient(env, options(async () => {
+    requests++; return new Response("<html>Unauthorized</html>", { status: 401 });
+  }));
+  await assert.rejects(client.run(MODEL_NAME, input), error => error.code === "http_401" && !error.retryable);
+  assert.equal(requests, 1);
+  const restored = createModelClient(env, { ...options(async () => good()), initialStats: { attempts: 64 } });
+  await assert.rejects(restored.run(MODEL_NAME, input), error => error.code === "daily_budget");
+  assert.equal(restored.stats.attempts, 64);
+});

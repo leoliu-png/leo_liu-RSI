@@ -172,7 +172,7 @@
       </div>
     </section>
 
-    <section class="panel section" id="cycle"><div class="section-head"><h2>每日自进化流程</h2><span>CLOUDFLARE CRON · 01:00 UTC / 09:00 CST</span></div><div class="flow">
+    <section class="panel section" id="cycle"><div class="section-head"><h2>每日自进化流程</h2><span>09:00 启动 · 12:00 / 20:00 看门狗 · 断点续跑</span></div><div class="flow">
       <div class="step"><b>01 / 诊断</b><h3>分析历次失败</h3><p>只向生成器提供开发集失分，分析事实遗漏和拒绝原因。</p></div>
       <div class="step"><b>02 / 双层变异</b><h3>策略各出一案</h3><p>当前策略和挑战策略各提出一个完整候选 Prompt。</p></div>
       <div class="step"><b>03 / 执行</b><h3>生成真实摘要</h3><p>冠军和候选处理同一批开发文章与当日隔离验证文章。</p></div>
@@ -262,21 +262,24 @@
         const data=item[set];if(!data?.dimensions)return;
         const row=make("tr");[`${item.label} / ${set==="development"?"开发":"验证"}`,...["accuracy","completeness","constraints","clarity","format"].map(key=>number(data.dimensions[key])),number(data.score),data.errors.length].forEach(value=>row.append(make("td",value)));dims.append(row);
       }));
-      $("#audit-score").textContent=run?.audit ? `${run.audit.championVersion} · ${number(run.audit.metrics.score)} 分` : "待测";
+      $("#audit-score").textContent=run?.audit?.metrics ? `${run.audit.championVersion} · ${number(run.audit.metrics.score)} 分`
+        : run?.audit ? (run.audit.status==="failed" ? `审计中断：${run.audit.error}` : "主实验已完成，审计待补测") : "待测";
       const audit=$("#audit-outputs");audit.replaceChildren();
-      run?.audit?.metrics.outputs.forEach(output=>{
+      run?.audit?.metrics?.outputs?.forEach(output=>{
         const card=make("article",null,"sample");card.append(make("h3",`${output.title} · ${number(output.score)} 分`),make("p",run.audit.samples.find(item=>item.id===output.sampleId)?.article),make("pre",output.summary),semanticEvidence(output));audit.append(card);
       });
     }
     function render(state) {
-      const run=state.latestRun, champion=state.champion;
+      const run=state.latestRun, champion=state.champion, job=state.automation;
       renderEvaluation(state);
       const limited=run?.status === "completed" && ["partial_candidates","generation_exhausted"].includes(run.outcome);
       const assisted=run?.status === "completed" && run.outcome === "fallback_candidates";
       $("#online-status").textContent = limited ? "LIMITED / 候选去重受限" : assisted ? "GUARDED / 规则补位完成" : run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
+      if (["queued","running","paused","waiting_retry"].includes(job?.status)) $("#online-status").textContent=`RUNNING / ${job.status==="waiting_retry"?"等待自动续跑":"每日任务进行中"}`;
       $("#version").textContent = champion.version;
       $("#score").textContent = number(champion.score);
       $("#decision").textContent = run?.status === "completed" ? (run.accepted ? "已晋级" : limited ? "去重回退" : assisted ? "规则补位" : "保留冠军") : run?.status === "failed" ? "运行失败" : "待运行";
+      if (run?.status==="running" || run?.status==="paused") $("#decision").textContent=run.status==="paused"?"断点续跑":"运行中";
       $("#date").textContent = run?.date || "每天 09:00 CST";
       $("#champion-title").textContent = `冠军提示词 · ${champion.version}`;
       $("#champion-prompt").textContent = champion.prompt;
@@ -348,17 +351,26 @@
         outputs.append(grid);
       } else outputs.append(make("p","首次实验完成后展示冠军版本生成的摘要。","note"));
       const notice=$("#notice");
-      if(run?.status==="failed") { notice.classList.add("error"); notice.textContent=`最近实验失败：${run.error}。当前冠军没有被替换；下一次定时运行将重试。`; }
+      if(run?.audit?.status==="failed" || run?.audit?.status==="pending") {
+        notice.textContent=`主实验已完成，晋级仅依据已保存的开发集与隔离验证证据。独立审计${run.audit.status==="failed"?`中断：${run.audit.error}`:"待补测"}，不撤销主实验结果。${job?.nextRetryAt?`下次自动续跑：${new Date(job.nextRetryAt).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}。`:"请查看任务状态，审计不完整不会被冒充为全部通过。"}`;
+      }
+      else if (["running","paused","failed"].includes(run?.status)) {
+        if(run.status==="failed") notice.classList.add("error");
+        const stopped=["blocked","exhausted","missed"].includes(job?.status) || run.retryable===false;
+        notice.textContent=`${run.status==="failed"?`实验中断：${run.error}。`:"每日实验正在执行或等待续跑。"}已保存步骤 ${run.progress?.completedTasks??0}，当前阶段 ${run.progress?.stage||"待确认"}；原冠军不变。${job?.nextRetryAt?`下次续跑：${new Date(job.nextRetryAt).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}。`:stopped?"自动重试已停止，需要处理故障；不会伪造成功结果。":"等待调度器从断点继续。"}`;
+      }
       else if(limited) notice.textContent="模型给出了重复候选，系统已拦截并有限重试；未凑齐两条不同候选时不进行策略比较。冠军仅在通过隔离文章验证时晋级，重复本身不会造成整日实验失败。";
       else if(assisted) notice.textContent="模型反复提出重复或改动过小的候选时，系统用预定义的实质性核验规则补位并完成评测；补位结果不会被冒充为模型策略胜利。冠军仍须通过开发集和隔离文章验证才能晋级。";
       else notice.textContent=run?.schemaVersion===4
         ? "Cloudflare 每天自动运行双层实验；策略比较、提示词晋级和隔离文章验证证据均保留在记录中。GitHub 保存每日快照。"
         : "旧模型实验已保留；新模型将重新校准评委、重新评测冠军，不把旧评分直接当作新基线。";
     }
-    fetch("/api/evolution",{cache:"no-store"}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}).then(render).catch(error=>{
+    function loadState() { fetch("/api/evolution",{cache:"no-store"}).then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();}).then(state=>{render(state);setTimeout(loadState,60000);}).catch(error=>{
       $("#online-status").textContent="OFFLINE / 数据读取失败";
       const notice=$("#notice");notice.classList.add("error");notice.textContent=`无法读取实验数据：${error.message}`;
-    });
+      setTimeout(loadState,60000);
+    }); }
+    loadState();
   </script>
 </body>
 </html>

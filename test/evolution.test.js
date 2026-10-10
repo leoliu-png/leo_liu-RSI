@@ -5,11 +5,14 @@ import { holdoutForDate } from "../src/holdout.js";
 import { developmentCorpus, validationCorpus, auditCorpus, calibrationCases, validationForDate } from "../src/corpus.js";
 import { judgmentFor } from "../test-support/judgment.js";
 import { hasSnapshotEvidence } from "../scripts/snapshot-evidence.mjs";
+import { CHECKPOINT_PREFIX } from "../src/journal.js";
 import {
   STATE_KEY, RUN_PREFIX, challengerBeatsIncumbent, experimentDate, getState, initialState, publicState,
   promotionDecision, rescoreMetrics, runEvolution as runRealEvolution, scoreSummary, updateStrategyTrial
 } from "../src/evolution.js";
 const runEvolution = (env, timestamp) => runRealEvolution(env, timestamp, env.AI);
+
+const outage = () => Object.assign(new Error("temporary upstream outage"), { providerFailure: true, retryable: true, code: "http_503" });
 
 const promptA = "候选 A。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；输出前逐项核对每个数字的计量对象、适用范围、前提条件和原文证据，找不到直接依据就删除该断言，禁止臆造原文以外的信息，全文控制在 450 字以内。";
 const promptB = "候选 B。结论：先写结论。要点：列出事实。风险：说明限制。术语：解释术语。仅依据原文，保留实体和数字；风险段区分已观察到的问题和未证实的可能性，术语段只解释文中实际定义的概念，并删除四段间重复事实，禁止编造，全文控制在 450 字以内。";
@@ -335,4 +338,129 @@ test("Minimax migration prefers the Laguna champion and preserves its original e
   assert.deepEqual(state.feedbackHistory, []);
   assert.deepEqual(state.seenCandidateKeys, ["oldcandidate"]);
   assert.equal(mock.values.get(key), JSON.stringify(old));
+});
+
+test("a failed baseline judgment resumes the saved summary without redoing calibration", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  let failed = false, summaryCalls = 0;
+  mock.env.AI.run = async (model, input) => {
+    if (input.temperature === 0 && !input.messages[0].content.startsWith("rsi-evaluator-v4")) summaryCalls++;
+    if (input.messages[0].content.startsWith("rsi-evaluator-v4")) {
+      const payload = JSON.parse(input.messages[1].content);
+      if (!failed && developmentCorpus.some(sample => sample.article === payload.summary)) {
+        failed = true; throw outage();
+      }
+    }
+    return original(model, input);
+  };
+  const time = Date.parse("2026-09-24T01:00:00Z");
+  await assert.rejects(runEvolution(mock.env, time), /upstream outage/);
+  const interrupted = await getState(mock.env);
+  assert.equal(interrupted.latestRun.retryable, true);
+  const runId = interrupted.latestRun.id;
+  const saved = await mock.env.EVOLUTION.get(`${CHECKPOINT_PREFIX}2026-09-24`);
+  assert.equal(saved.tasks.calibration.status, "completed");
+  assert.ok(Object.keys(saved.tasks).some(key => key.startsWith("summary:baseline:dev:") && saved.tasks[key].status === "completed"));
+  const result = await runEvolution(mock.env, time);
+  assert.equal(result.state.latestRun.id, runId);
+  assert.equal(result.state.latestRun.attempts.length, 2);
+  assert.equal(summaryCalls, 18, "15 core summaries and 3 audits, with no regenerated failed summary");
+  assert.equal(result.state.history.length, 1);
+  assert.equal(result.state.generation, 1);
+});
+
+test("audit outage preserves promotion and resumes only the unfinished audit", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  let failed = false, coreCallsAfterFailure;
+  mock.env.AI.run = async (model, input) => {
+    const article = input.messages[1].content;
+    if (!failed && input.temperature === 0 && auditCorpus.some(sample => article.includes(sample.article))) {
+      failed = true; throw outage();
+    }
+    return original(model, input);
+  };
+  const time = Date.parse("2026-09-24T01:00:00Z");
+  const first = await runEvolution(mock.env, time);
+  assert.equal(first.state.latestRun.status, "completed");
+  assert.equal(first.state.latestRun.coreStatus, "completed");
+  assert.equal(first.state.latestRun.audit.status, "failed");
+  assert.equal(first.state.generation, 1);
+  assert.equal(hasSnapshotEvidence(first.state), true);
+  assert.equal(first.state.feedbackHistory.length, 1);
+  coreCallsAfterFailure = mock.proposalCalls();
+  const second = await runEvolution(mock.env, time);
+  assert.equal(second.state.latestRun.audit.status, "completed");
+  assert.equal(mock.proposalCalls(), coreCallsAfterFailure);
+  assert.equal(second.state.generation, 1);
+  assert.equal(second.state.history.length, 1);
+  assert.equal(second.state.strategyHistory.length, 1);
+  assert.equal(second.state.feedbackHistory.length, 1);
+  assert.equal(second.state.latestRun.id, first.state.latestRun.id);
+  const before = mock.calls();
+  assert.equal((await runEvolution(mock.env, time)).skipped, true);
+  assert.equal(mock.calls(), before);
+});
+
+test("failed candidate validation preserves seen prompts and development-only feedback", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  let failed = false;
+  mock.env.AI.run = async (model, input) => {
+    if (input.messages[0].content.startsWith("rsi-evaluator-v4")) {
+      const payload = JSON.parse(input.messages[1].content);
+      if (!failed && payload.summary.startsWith("结论：概述") &&
+          validationCorpus.some(sample => payload.summary.includes(sample.article))) {
+        failed = true; throw outage();
+      }
+    }
+    return original(model, input);
+  };
+  await assert.rejects(runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z")), /upstream outage/);
+  const state = await getState(mock.env);
+  assert.ok(state.seenCandidateKeys.includes(promptA.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase()));
+  assert.ok(state.recentCandidatePrompts.includes(promptB));
+  assert.equal(state.feedbackHistory.at(-1).candidates[0].id, "C1");
+  assert.equal(state.feedbackHistory.at(-1).incomplete, true);
+  const feedback = JSON.stringify(state.feedbackHistory);
+  assert.ok([...validationCorpus, ...auditCorpus].every(sample => !feedback.includes(sample.article)));
+  assert.ok(state.latestRun.partialEvidence.length > 0);
+  const result = await runEvolution(mock.env, Date.parse("2026-09-24T02:00:00Z"));
+  assert.equal(result.state.latestRun.status, "completed");
+  assert.equal(result.state.feedbackHistory.length, 1);
+});
+
+test("malformed candidate JSON consumes a bounded proposal attempt instead of aborting the day", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  let malformed = false;
+  mock.env.AI.run = async (model, input) => {
+    if (!malformed && input.temperature === 0.7) { malformed = true; return { response: "not JSON" }; }
+    return original(model, input);
+  };
+  const { state } = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(state.latestRun.status, "completed");
+  assert.equal(state.latestRun.candidateGeneration.results[0].attempts, 2);
+  assert.match(state.latestRun.candidateGeneration.results[0].rejected[0].reason, /结构不合法/);
+});
+
+test("execution slicing checkpoints work and does not spend new calls before resuming", async () => {
+  const mock = fakeEnvironment(), time = Date.parse("2026-09-24T01:00:00Z");
+  await assert.rejects(runRealEvolution(mock.env, time, mock.env.AI, { executionWindowMs: 0 }), /Execution slice/);
+  assert.equal(mock.calls(), 0);
+  assert.equal((await getState(mock.env)).latestRun.status, "paused");
+  const result = await runEvolution(mock.env, time);
+  assert.equal(result.state.latestRun.status, "completed");
+});
+
+test("daily inference budget survives failures and cannot be reset by a retry", async () => {
+  const mock = fakeEnvironment(), time = Date.parse("2026-09-24T01:00:00Z");
+  await assert.rejects(runRealEvolution(mock.env, time, mock.env.AI, { executionWindowMs: 0 }));
+  const key = `${CHECKPOINT_PREFIX}2026-09-24`, checkpoint = await mock.env.EVOLUTION.get(key);
+  checkpoint.usage.calls = 63;
+  checkpoint.usage.byModel = { "previous-call": 63 };
+  mock.values.set(key, JSON.stringify(checkpoint));
+  await assert.rejects(runEvolution(mock.env, time), /budget exhausted/);
+  const before = mock.calls();
+  assert.equal((await getState(mock.env)).latestRun.code, "daily_budget");
+  await assert.rejects(runEvolution(mock.env, time), /budget exhausted/);
+  assert.equal(mock.calls(), before);
+  assert.equal((await getState(mock.env)).latestRun.usage.calls, 64);
 });

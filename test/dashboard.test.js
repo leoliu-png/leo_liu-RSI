@@ -58,3 +58,16 @@ test("dashboard renders V4 dimensions, calibration and evidence; excludes V3 fro
   assert.match(elements.get("#chart-note").textContent, /1 次真实实验/);
   assert.ok(elements.get("#evaluator-info").textContent.includes(MODEL_NAME));
 });
+
+test("dashboard distinguishes pending audit and scheduled recovery from successful full audit", () => {
+  const state = publicState(initialState());
+  state.latestRun = { status: "completed", coreStatus: "completed", schemaVersion: 4, candidates: [],
+    audit: { status: "failed", metrics: null, error: "upstream 503", championVersion: "v0" } };
+  state.automation = { status: "waiting_retry", nextRetryAt: "2026-10-10T02:00:00Z" };
+  const elements = render(state);
+  assert.match(elements.get("#audit-score").textContent, /审计中断/);
+  assert.match(elements.get("#notice").textContent, /主实验已完成/);
+  assert.match(elements.get("#notice").textContent, /下次自动续跑/);
+  state.latestRun = { status: "paused", progress: { completedTasks: 7, stage: "baseline-validation" } };
+  assert.match(render(state).get("#notice").textContent, /已保存步骤 7/);
+});

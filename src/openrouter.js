@@ -1,5 +1,5 @@
 import { MODEL_NAME, MODEL_SUPPORTS_SEED, MODEL_BASE_URL } from "./model.js";
-const providerFailure = message => Object.assign(new Error(message), { providerFailure: true });
+const providerFailure = (message, extra = {}) => Object.assign(new Error(message), { providerFailure: true, retryable: false, ...extra });
 
 export function redactError(value, key) {
   let message = String(value).replace(/sk-[a-zA-Z0-9_-]+/g, "[REDACTED]");
@@ -11,7 +11,7 @@ export function createModelClient(env, options = {}) {
   const request = options.fetch || fetch;
   const pause = options.sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
   const now = options.now || Date.now;
-  const stats = { attempts: 0, retries: 0, cost: 0, reportedCostCalls: 0 };
+  const stats = { attempts: 0, retries: 0, cost: 0, reportedCostCalls: 0, ...options.initialStats };
   const active = new Set();
   let canceled = false;
   let queue = Promise.resolve();
@@ -39,11 +39,12 @@ export function createModelClient(env, options = {}) {
     }
     for (let attempt = 0; attempt < 2; attempt++) {
       await startGate();
-      if (stats.attempts >= maxAttempts) throw providerFailure(`LiteLLM HTTP attempt budget exhausted (${maxAttempts})`);
+      if (stats.attempts >= maxAttempts) throw providerFailure(`LiteLLM HTTP attempt budget exhausted (${maxAttempts})`, { code: "daily_budget" });
       stats.attempts++;
+      await options.onAttempt?.(stats);
       let response, data;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120000);
+      const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 90000);
       active.add(controller);
       try {
         response = await request(`${MODEL_BASE_URL}/chat/completions`, {
@@ -52,9 +53,23 @@ export function createModelClient(env, options = {}) {
             temperature: input.temperature, ...(MODEL_SUPPORTS_SEED ? { seed: input.seed } : {}) }),
           signal: controller.signal
         });
-        data = await response.json();
+        try { data = await response.json(); }
+        catch {
+          throw providerFailure(`LiteLLM HTTP ${response.status}: invalid JSON response`, {
+            status: response.status, code: response.ok ? "invalid_response" : `http_${response.status}`,
+            retryable: response.status === 429 || response.status >= 500
+          });
+        }
       } catch (error) {
-        throw providerFailure(`LiteLLM request failed: ${redactError(error.message, env.MODEL_API_KEY)}`);
+        if (error.providerFailure && error.retryable === false) throw error;
+        if (!canceled && !attempt) {
+          stats.retries++;
+          await pause(10000);
+          continue;
+        }
+        throw providerFailure(`LiteLLM request failed: ${redactError(error.message, env.MODEL_API_KEY)}`, {
+          code: canceled ? "canceled" : error.code || "network_error", retryable: !canceled
+        });
       } finally {
         clearTimeout(timeout);
         active.delete(controller);
@@ -72,7 +87,8 @@ export function createModelClient(env, options = {}) {
           await pause(Math.max(1000, retryMs));
           continue;
         }
-        throw providerFailure(`LiteLLM ${status}: ${message}`);
+        throw providerFailure(`LiteLLM ${status}: ${message}`, { status, code: exhausted ? "quota_exhausted" : `http_${status}`,
+          retryable: !exhausted && (status === 429 || status >= 500), retryAfterMs: Number.isFinite(retryMs) ? retryMs : 0 });
       }
       const choice = data.choices?.[0];
       if (choice?.finish_reason === "length") throw providerFailure("LiteLLM output was truncated; refusing incomplete evidence");

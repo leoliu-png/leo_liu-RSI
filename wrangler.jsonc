@@ -15,13 +15,17 @@
       "id": "4e340aede6d94c8092da5bbe834337d8"
     }
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "RUNNER", "class_name": "EvolutionRunner" }]
+  },
+  "migrations": [{ "tag": "v1-durable-runner", "new_sqlite_classes": ["EvolutionRunner"] }],
   "vars": {
     "MODEL_NAME": "minimax-m3",
     "JUDGE_MODEL": "minimax-m3",
     "MODEL_BASE_URL": "https://litellm.feedmob.it.com"
   },
   "triggers": {
-    "crons": ["0 1 * * *"]
+    "crons": ["0 1 * * *", "0 4 * * *", "0 12 * * *"]
   },
   "observability": {
     "enabled": true,

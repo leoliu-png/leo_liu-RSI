@@ -3,10 +3,16 @@ name: Archive daily RSI experiment
 on:
   schedule:
     - cron: "0 2 * * *"
+    - cron: "0 8 * * *"
+    - cron: "55 15 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: rsi-archive-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   archive:
@@ -19,14 +25,24 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run snapshot
-      - name: Commit measured experiment
+      - id: snapshot
+        run: npm run snapshot
+      - name: Preserve diagnostics even when a task fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsi-evidence-${{ github.run_id }}
+          path: snapshots/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Commit measured experiment or clearly labelled failure evidence
+        if: always() && (steps.snapshot.outcome == 'success' || steps.snapshot.outcome == 'failure')
         run: |
           git config user.name "rsi-evolution-bot"
           git config user.email "rsi-evolution-bot@users.noreply.github.com"
           git add snapshots/
           if ! git diff --cached --quiet; then
-            git commit -m "experiment: archive measured RSI run"
+            git commit -m "experiment: archive RSI measurements and operational evidence"
             git pull --rebase
             git push
           fi
