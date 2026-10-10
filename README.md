@@ -62,7 +62,7 @@ Cloudflare Builds 连接 `leoliu-png/leo_liu-RSI` 的 `main`：构建 `npm ci &&
 
 `MODEL_API_KEY` 仅放在 Cloudflare Secret（`npx wrangler secret put MODEL_API_KEY`），不得提交源码或网页。本地开发通过未跟踪的 `.dev.vars` 或受控进程环境注入，禁止写入可归档数据。`src/model.js` 和 `wrangler.jsonc` 中的模型与服务地址必须保持一致。服务额度、费用与可用性由所配置的 LiteLLM 服务决定；不自动切换其他模型，不绕过限流。实验仅发送项目人工编写的文章，勿用于机密或个人数据。
 
-`RUN_TOKEN` 或独立 `MAINTENANCE_TOKEN` Secret 保护 `POST /api/admin/run`（202：排入持久任务，不在 HTTP 请求中同步跑长实验）与 `POST /api/admin/probe`（一次模型连接诊断）。不改变已有 RUN_TOKEN。重复排队不会重置预算或重跑完成任务；旧 `/api/admin/rescore` 返回 409。网站从 Durable Object 读取权威状态，不需要重新部署 HTML。
+`RUN_TOKEN` 或独立 `MAINTENANCE_TOKEN` Secret 保护 `POST /api/admin/run`（202：排入持久任务，不在 HTTP 请求中同步跑长实验）、`POST /api/admin/probe`（一次模型连接诊断）与 `POST /api/admin/resume`（外部故障处理后人工恢复当天 blocked 任务，不能清零预算或突破次数上限）。不改变已有 RUN_TOKEN。重复排队不会重置预算或重跑完成任务；旧 `/api/admin/rescore` 返回 409。网站从 Durable Object 读取权威状态，不需要重新部署 HTML。
 
 新模型使用 `rsi:v4:litellm-minimax-m3:state`、`rsi:v4:litellm-minimax-m3:run:YYYY-MM-DD`；优先从 Laguna 状态迁移冠军与历史候选，清空旧评分、失败反馈、挑战策略试验和审计缓存，旧 V2/V3/V4/Nemotron/Laguna 原始键不删。同一天旧模型完成也不阻止新模型实验。每日归档为 `snapshots/YYYY-MM-DD-v4-litellm-minimax-m3.json`，不覆盖同日旧档；归档校验必须有语义证据与通过的校准记录。代码测试使用明确标记的模拟评委；真实调用另行验证并存档，不能将模拟测试称为真实质量提升。
 

@@ -152,3 +152,24 @@ test("SQLite authority survives a KV mirror failure and supports large checkpoin
   assert.equal(writes, 1, "frequent checkpoint writes are not limited by KV per-key rate limits");
   db.close();
 });
+
+test("operator recovery resumes a blocked day without resetting budgets or rerunning completed jobs", async () => {
+  let fixed = false, calls = 0;
+  const mock = harness(async () => {
+    calls++;
+    if (!fixed) throw Object.assign(new Error("quota exhausted"), { retryable: false, code: "quota_exhausted" });
+    return { state: { latestRun: { audit: { status: "completed" } } } };
+  });
+  await mock.runner.schedule();
+  await mock.runner.alarm();
+  assert.equal((await mock.storage.get("daily-job")).failures, 1);
+  assert.equal((await mock.runner.schedule()).queued, false);
+  fixed = true;
+  assert.equal((await mock.runner.schedule(mock.now(), true)).resumed, true);
+  assert.equal((await mock.storage.get("daily-job")).failures, 1);
+  assert.equal((await mock.storage.get("daily-job")).executions, 1);
+  await mock.runner.alarm();
+  assert.equal(calls, 2);
+  assert.equal((await mock.storage.get("daily-job")).status, "completed");
+  assert.equal((await mock.runner.schedule(mock.now(), true)).queued, false);
+});

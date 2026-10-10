@@ -75,12 +75,19 @@ export class EvolutionRunner {
     await this.records.put(`rsi:v4:${MODEL_PROFILE}:automation:${job.date}`, JSON.stringify(job));
   }
 
-  async schedule(timestamp = this.now()) {
+  async schedule(timestamp = this.now(), resume = false) {
     return this.ctx.blockConcurrencyWhile(async () => {
       const date = experimentDate(timestamp);
       if (date !== experimentDate(this.now())) return { queued: false, reason: "expired_schedule" };
       const existing = await this.ctx.storage.get(JOB_KEY);
       if (existing?.date === date) {
+        if (resume && existing.status === "blocked" && !this.busy &&
+            existing.failures < MAX_FAILURES && existing.executions < MAX_EXECUTIONS) {
+          existing.status = "queued";
+          existing.nextRetryAt = null;
+          await this.saveJob(existing, this.now() + 1000);
+          return { queued: true, resumed: true, job: existing };
+        }
         if (terminal.has(existing.status) || this.busy) return { queued: false, job: existing };
         const alarm = await this.ctx.storage.getAlarm();
         if (alarm !== null) return { queued: true, job: existing };
@@ -168,9 +175,9 @@ export class EvolutionRunner {
 
   async fetch(request) {
     const path = new URL(request.url).pathname;
-    if (path === "/schedule" && request.method === "POST") {
+    if (["/schedule", "/resume"].includes(path) && request.method === "POST") {
       const { timestamp } = await request.json();
-      return Response.json(await this.schedule(timestamp));
+      return Response.json(await this.schedule(timestamp, path === "/resume"));
     }
     if (path === "/state") {
       return Response.json({ ...publicState(await getState(this.runEnv)),

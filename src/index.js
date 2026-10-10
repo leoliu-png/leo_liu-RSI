@@ -33,10 +33,11 @@ export default {
       if (path === "/api/health" && request.method === "GET") {
         return json({ ok: true, version: 4, provider: MODEL_PROVIDER, model: MODEL_NAME, modelProfile: MODEL_PROFILE, now: new Date().toISOString() });
       }
-      if (["/api/admin/run", "/api/admin/probe"].includes(path) && request.method === "POST") {
+      if (["/api/admin/run", "/api/admin/resume", "/api/admin/probe"].includes(path) && request.method === "POST") {
         const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
         if (!await tokenMatches(provided, env.RUN_TOKEN) && !await tokenMatches(provided, env.MAINTENANCE_TOKEN)) return json({ error: "Unauthorized" }, 401);
-        const response = await runner(env).fetch(`https://runner/${path.endsWith("probe") ? "probe" : "schedule"}`, {
+        const action = path.endsWith("probe") ? "probe" : path.endsWith("resume") ? "resume" : "schedule";
+        const response = await runner(env).fetch(`https://runner/${action}`, {
           method: "POST", body: JSON.stringify({ timestamp: Date.now() })
         });
         return json(await response.json(), path.endsWith("probe") ? response.status : response.ok ? 202 : response.status);

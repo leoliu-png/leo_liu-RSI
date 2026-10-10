@@ -1,0 +1,534 @@
+{
+  "verificationType": "real-daily-run-blocked-not-success",
+  "checkedAt": "2026-10-10T09:57:44.052Z",
+  "model": "minimax-m3",
+  "provider": "LiteLLM",
+  "baseUrl": "https://litellm.feedmob.it.com",
+  "modelProfile": "litellm-minimax-m3",
+  "championVersion": "v1",
+  "releaseCommit": "d56b71de53f4f929c7678a24d706d3b57f1010db",
+  "cloudflareBuild": "https://github.com/leoliu-png/leo_liu-RSI/runs/114186894884",
+  "checks": {
+    "cloudflareBuildPassed": true,
+    "modelConnectivityObserved": true,
+    "realExperimentCompleted": false,
+    "quotaExhaustionStoppedWithoutRequestRetries": true,
+    "originalChampionPreserved": true,
+    "automaticJobBlocked": true
+  },
+  "automation": {
+    "date": "2026-10-10",
+    "timestamp": 1791626119020,
+    "status": "blocked",
+    "executions": 1,
+    "failures": 1,
+    "deadlineAt": "2026-10-10T23:50:00+08:00",
+    "maxFailures": 5,
+    "maxExecutions": 16,
+    "nextRetryAt": null,
+    "startedAt": "2026-10-10T09:55:19.075Z",
+    "updatedAt": "2026-10-10T09:55:22.533Z",
+    "error": "Semantic evaluation failed for postgres-replica: LiteLLM 429: litellm.RateLimitError: RateLimitError: OpenAIException - Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage. (2056). Received Model Group=minimax-m3\nAvailable Model Group Fallbacks=None",
+    "code": "quota_exhausted"
+  },
+  "run": {
+    "id": "650f412d-ed27-4138-9065-824406ff61d2",
+    "schemaVersion": 4,
+    "scorerVersion": 4,
+    "date": "2026-10-10",
+    "startedAt": "2026-10-10T09:55:20.664Z",
+    "model": "minimax-m3",
+    "modelProfile": "litellm-minimax-m3",
+    "provider": "LiteLLM",
+    "evaluator": {
+      "model": "minimax-m3",
+      "version": "semantic-v4.2-minimax-m3",
+      "rubric": {
+        "accuracy": 40,
+        "completeness": 25,
+        "constraints": 20,
+        "clarity": 10,
+        "format": 5
+      }
+    },
+    "datasetVersion": "curated-2026-10-v2",
+    "usage": {
+      "calls": 1,
+      "byModel": {
+        "minimax-m3": 1
+      },
+      "judgeCacheHits": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "transport": {
+        "attempts": 1,
+        "retries": 0,
+        "cost": 0,
+        "reportedCostCalls": 0
+      }
+    },
+    "progress": {
+      "stage": "calibration",
+      "completedTasks": 0,
+      "calls": 1,
+      "callLimit": 64,
+      "resumable": true
+    },
+    "attempts": [
+      {
+        "startedAt": "2026-10-10T09:55:20.664Z",
+        "status": "failed",
+        "fromStage": "calibration",
+        "completedAt": "2026-10-10T09:55:22.042Z",
+        "error": "Semantic evaluation failed for postgres-replica: LiteLLM 429: litellm.RateLimitError: RateLimitError: OpenAIException - Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage. (2056). Received Model Group=minimax-m3\nAvailable Model Group Fallbacks=None",
+        "code": "quota_exhausted"
+      }
+    ],
+    "developmentSamples": [
+      {
+        "id": "postgres-replica",
+        "title": "异步只读副本",
+        "article": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。副本故障时读请求会回退主库。这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+        "reference": "结论：异步只读副本提高读吞吐量，但不保证即时一致性。\n要点：订单写入 PostgreSQL 主库后返回成功；副本异步复制，因此刚下单后查询可能短时间看不到订单；副本故障时读请求回退主库。\n风险：不能用副本保证刚写入的订单立即可见。\n术语：文中只读副本通过异步复制接收变更。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。"
+          },
+          {
+            "id": "S2",
+            "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。"
+          },
+          {
+            "id": "S3",
+            "text": "副本故障时读请求会回退主库。"
+          },
+          {
+            "id": "S4",
+            "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "订单服务把写入提交到 PostgreSQL 主库，再返回成功。",
+            "weight": 2,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "只读副本通过异步复制接收变更，因此用户刚下单后立即查询副本，可能短时间看不到订单。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "副本故障时读请求会回退主库。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "这种设计提高读吞吐量，但不保证副本上的即时一致性。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "可能短时间看不到订单",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不保证副本上的即时一致性",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "http-cache",
+        "title": "HTTP 条件请求",
+        "article": "服务器在响应中返回 ETag。客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。ETag 由服务端维护，不能仅凭文件名判断内容是否变化。该机制减少重复传输，但首次请求仍需获取完整资源。",
+        "reference": "结论：ETag 条件请求减少重复传输，首次请求仍需完整资源。\n要点：服务器返回 ETag；客户端下次带 If-None-Match；只有资源未变化时，服务器可返回 304 且不发送响应正文。\n风险：ETag 由服务端维护，不能仅凭文件名判断变化；首次请求仍需获取完整资源。\n术语：ETag 由服务端维护；If-None-Match 由客户端下次请求携带。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "服务器在响应中返回 ETag。"
+          },
+          {
+            "id": "S2",
+            "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。"
+          },
+          {
+            "id": "S3",
+            "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。"
+          },
+          {
+            "id": "S4",
+            "text": "该机制减少重复传输，但首次请求仍需获取完整资源。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "服务器在响应中返回 ETag。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "客户端下次请求携带 If-None-Match；如果资源没有变化，服务器可返回 304，并且不再发送响应正文。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "ETag 由服务端维护，不能仅凭文件名判断内容是否变化。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "该机制减少重复传输，但首次请求仍需获取完整资源。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "如果资源没有变化",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不能仅凭文件名判断内容是否变化",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "首次请求仍需获取完整资源",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "passkeys",
+        "title": "通行密钥登录",
+        "article": "WebAuthn 登录时，服务器生成一次性 challenge。认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。私钥留在用户设备，不会发送给网站。若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+        "reference": "结论：WebAuthn 通过挑战签名验证身份，但不能消除账户恢复问题。\n要点：服务器生成一次性 challenge；认证器用私钥签名，服务器用已登记公钥验签；私钥留在设备，不发送给网站。\n风险：设备丢失时，用户需要事先配置的恢复方式。\n术语：challenge 是一次性挑战；私钥用于签名，公钥用于验证签名。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "WebAuthn 登录时，服务器生成一次性 challenge。"
+          },
+          {
+            "id": "S2",
+            "text": "认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。"
+          },
+          {
+            "id": "S3",
+            "text": "私钥留在用户设备，不会发送给网站。"
+          },
+          {
+            "id": "S4",
+            "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "WebAuthn 登录时，服务器生成一次性 challenge。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "认证器使用私钥对挑战签名，服务器用已登记的公钥验证签名。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "私钥留在用户设备，不会发送给网站。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "若设备丢失，用户需要事先配置的恢复方式；通行密钥不能消除账户恢复问题。",
+            "weight": 2,
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "私钥留在用户设备，不会发送给网站",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "用户需要事先配置的恢复方式",
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "通行密钥不能消除账户恢复问题",
+            "evidenceIds": [
+              "S4"
+            ]
+          }
+        ]
+      }
+    ],
+    "validationSamples": [
+      {
+        "id": "backup-restore-2026-10-10",
+        "title": "备份成功与恢复演练",
+        "article": "系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复。团队将恢复时间目标设为 45 分钟，但该目标尚未在更大数据库上验证。若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。",
+        "reference": "结论：备份上传成功不能代替恢复演练。\n要点：每 6 小时增量、每天完整备份；单个 80 GB 库的演练耗时 37 分钟，核验校验和及关键表记录数；恢复目标为 45 分钟。\n风险：大库尚未验证；最后增量损坏时会退回较早完整备份，数据损失可能超过 6 小时。\n术语：恢复时间目标是团队设定的目标，并非所有数据库的实测结果。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。"
+          },
+          {
+            "id": "S2",
+            "text": "最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。"
+          },
+          {
+            "id": "S3",
+            "text": "备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复。"
+          },
+          {
+            "id": "S4",
+            "text": "团队将恢复时间目标设为 45 分钟，但该目标尚未在更大数据库上验证。"
+          },
+          {
+            "id": "S5",
+            "text": "若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "系统每 6 小时进行一次增量备份，并在每天凌晨生成完整备份。",
+            "weight": 1,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "最近一次演练在单个 80 GB 数据库上耗时 37 分钟，演练同时验证了校验和与关键表记录数。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "备份上传成功只证明文件到达对象存储，不代表数据库一定能够恢复。",
+            "weight": 3,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "团队将恢复时间目标设为 45 分钟，但该目标尚未在更大数据库上验证。",
+            "weight": 3,
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "F5",
+            "text": "若最后一次增量备份损坏，恢复会退回较早的完整备份，因此可能丢失更多最近写入，不能保证任何情况下都只丢失 6 小时数据。",
+            "weight": 3,
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "不代表数据库一定能够恢复",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "尚未在更大数据库上验证",
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "不能保证任何情况下都只丢失 6 小时数据",
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "experiment-selection-2026-10-10",
+        "title": "实验分组与转化率",
+        "article": "页面实验持续 14 天，按登录用户编号随机分组，并排除机器人流量。新页面组转化率为 4.2%，旧页面组为 4.0%，但置信区间包含零差异，因此没有足够证据宣布新页面提升转化。未登录访客没有进入随机分组，他们的整体转化率不能用于替代组间比较。实验期间广告预算增加了 15%，两个随机组同时受到影响。团队决定再运行 7 天，延长实验只是计划，并不能保证最终会出现显著改善。",
+        "reference": "结论：当前数据不足以宣布新页面提高转化率。\n要点：14 天实验按登录用户编号随机分组，排除机器人；新旧组为 4.2% 和 4.0%，置信区间包含零差异；广告预算同期增 15%，两组均受影响。\n风险：未登录访客不在随机组，不能替代组间比较；计划延长 7 天不保证显著改善。\n术语：原文中的零差异表示不能据此确认组间提升。",
+        "reviewStatus": "author-curated; awaiting independent human review",
+        "sources": [
+          {
+            "id": "S1",
+            "text": "页面实验持续 14 天，按登录用户编号随机分组，并排除机器人流量。"
+          },
+          {
+            "id": "S2",
+            "text": "新页面组转化率为 4.2%，旧页面组为 4.0%，但置信区间包含零差异，因此没有足够证据宣布新页面提升转化。"
+          },
+          {
+            "id": "S3",
+            "text": "未登录访客没有进入随机分组，他们的整体转化率不能用于替代组间比较。"
+          },
+          {
+            "id": "S4",
+            "text": "实验期间广告预算增加了 15%，两个随机组同时受到影响。"
+          },
+          {
+            "id": "S5",
+            "text": "团队决定再运行 7 天，延长实验只是计划，并不能保证最终会出现显著改善。"
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "页面实验持续 14 天，按登录用户编号随机分组，并排除机器人流量。",
+            "weight": 2,
+            "evidenceIds": [
+              "S1"
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "新页面组转化率为 4.2%，旧页面组为 4.0%，但置信区间包含零差异，因此没有足够证据宣布新页面提升转化。",
+            "weight": 3,
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "F3",
+            "text": "未登录访客没有进入随机分组，他们的整体转化率不能用于替代组间比较。",
+            "weight": 2,
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "F4",
+            "text": "实验期间广告预算增加了 15%，两个随机组同时受到影响。",
+            "weight": 1,
+            "evidenceIds": [
+              "S4"
+            ]
+          },
+          {
+            "id": "F5",
+            "text": "团队决定再运行 7 天，延长实验只是计划，并不能保证最终会出现显著改善。",
+            "weight": 2,
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "K1",
+            "text": "没有足够证据宣布新页面提升转化",
+            "evidenceIds": [
+              "S2"
+            ]
+          },
+          {
+            "id": "K2",
+            "text": "不能用于替代组间比较",
+            "evidenceIds": [
+              "S3"
+            ]
+          },
+          {
+            "id": "K3",
+            "text": "并不能保证最终会出现显著改善",
+            "evidenceIds": [
+              "S5"
+            ]
+          }
+        ]
+      }
+    ],
+    "candidates": [],
+    "status": "failed",
+    "completedAt": "2026-10-10T09:55:22.042Z",
+    "error": "Semantic evaluation failed for postgres-replica: LiteLLM 429: litellm.RateLimitError: RateLimitError: OpenAIException - Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage. (2056). Received Model Group=minimax-m3\nAvailable Model Group Fallbacks=None",
+    "code": "quota_exhausted",
+    "retryable": false,
+    "retryAfterMs": 10000,
+    "calibration": null,
+    "candidateGeneration": {
+      "maxAttemptsPerCandidate": 3,
+      "results": []
+    },
+    "proposals": [],
+    "failureEvidence": [],
+    "partialEvidence": []
+  }
+}
