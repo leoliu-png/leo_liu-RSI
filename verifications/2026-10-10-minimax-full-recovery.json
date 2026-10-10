@@ -1,0 +1,438 @@
+{
+  "verifiedAt": "2026-10-10T10:58:25.310Z",
+  "endpoint": "https://rsi-evolution-lab.leoliu-dev.workers.dev/api/evolution",
+  "sourceCommit": "d094ca9abf53f5e99420ee1249f90106dbc6f2f7",
+  "kind": "real-live-end-to-end-verification-not-simulation",
+  "checks": {
+    "completeSnapshot": true,
+    "jobCompleted": true,
+    "coreCompleted": true,
+    "calibrationEightPassed": true,
+    "twoRealModelCandidates": true,
+    "uniquePrompts": true,
+    "fullDevelopment": true,
+    "fullValidation": true,
+    "fullIndependentAudit": true,
+    "boundedCalls": true,
+    "durableSliceResumed": true,
+    "failureHistoryRetained": true,
+    "noLingeringJobError": true
+  },
+  "date": "2026-10-10",
+  "runId": "650f412d-ed27-4138-9065-824406ff61d2",
+  "model": "minimax-m3",
+  "champion": "v1",
+  "accepted": false,
+  "reason": "所有候选未同时通过开发集与新文章验证；冠军保持不变",
+  "calibration": [
+    {
+      "id": "correct-postgres-replica",
+      "passed": true,
+      "score": 95
+    },
+    {
+      "id": "correct-http-cache",
+      "passed": true,
+      "score": 95
+    },
+    {
+      "id": "correct-passkeys",
+      "passed": true,
+      "score": 100
+    },
+    {
+      "id": "wrong-cache-97",
+      "passed": true,
+      "score": 15
+    },
+    {
+      "id": "wrong-replica-negation",
+      "passed": true,
+      "score": 34.4
+    },
+    {
+      "id": "wrong-payment-cause",
+      "passed": true,
+      "score": 49
+    },
+    {
+      "id": "wrong-backup-number",
+      "passed": true,
+      "score": 49
+    },
+    {
+      "id": "wrong-passkey-recovery",
+      "passed": true,
+      "score": 49
+    }
+  ],
+  "baseline": {
+    "development": 49,
+    "validation": 49
+  },
+  "candidates": [
+    {
+      "id": "C1",
+      "source": "model",
+      "development": 79.7,
+      "validation": 72,
+      "eligible": false,
+      "reason": "开发集存在事实错误、编造或格式/长度不合规"
+    },
+    {
+      "id": "C2",
+      "source": "model",
+      "development": 98.3,
+      "validation": 72,
+      "eligible": false,
+      "reason": "隔离验证文章存在事实错误、编造或格式/长度不合规"
+    }
+  ],
+  "audit": {
+    "status": "completed",
+    "outputs": 3,
+    "score": 64.3,
+    "checkedAt": "2026-10-10T10:56:18.563Z"
+  },
+  "usage": {
+    "calls": 58,
+    "byModel": {
+      "minimax-m3": 58
+    },
+    "judgeCacheHits": 0,
+    "inputTokens": 76962,
+    "outputTokens": 141277,
+    "transport": {
+      "attempts": 58,
+      "retries": 0,
+      "cost": 0,
+      "reportedCostCalls": 0,
+      "inputTokens": 59276,
+      "outputTokens": 117960,
+      "reasoningTokens": 96987,
+      "truncatedResponses": 0
+    }
+  },
+  "automation": {
+    "date": "2026-10-10",
+    "timestamp": 1791626119020,
+    "status": "completed",
+    "executions": 8,
+    "failures": 4,
+    "deadlineAt": "2026-10-10T23:50:00+08:00",
+    "maxFailures": 5,
+    "maxExecutions": 16,
+    "nextRetryAt": null,
+    "startedAt": "2026-10-10T09:55:19.075Z",
+    "updatedAt": "2026-10-10T10:56:19.452Z",
+    "error": null,
+    "code": null,
+    "manualRecoveries": 1,
+    "retryFailures": 0,
+    "completedAt": "2026-10-10T10:56:19.452Z"
+  },
+  "attempts": [
+    {
+      "startedAt": "2026-10-10T09:55:20.664Z",
+      "status": "failed",
+      "fromStage": "calibration",
+      "completedAt": "2026-10-10T09:55:22.042Z",
+      "error": "Semantic evaluation failed for postgres-replica: LiteLLM 429: litellm.RateLimitError: RateLimitError: OpenAIException - Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage. (2056). Received Model Group=minimax-m3\nAvailable Model Group Fallbacks=None",
+      "code": "quota_exhausted"
+    },
+    {
+      "startedAt": "2026-10-10T10:08:06.957Z",
+      "status": "failed",
+      "fromStage": "calibration",
+      "completedAt": "2026-10-10T10:10:00.360Z",
+      "error": "Semantic evaluation failed for http-cache: Unexpected non-whitespace character after JSON at position 1285 (line 3 column 1284)",
+      "code": "judge_structure"
+    },
+    {
+      "startedAt": "2026-10-10T10:12:42.697Z",
+      "status": "failed",
+      "fromStage": "calibration",
+      "completedAt": "2026-10-10T10:12:43.309Z",
+      "error": "Semantic evaluation failed for http-cache: Unexpected non-whitespace character after JSON at position 1285 (line 3 column 1284)",
+      "code": "judge_structure"
+    },
+    {
+      "startedAt": "2026-10-10T10:19:54.798Z",
+      "status": "failed",
+      "fromStage": "calibration",
+      "completedAt": "2026-10-10T10:22:16.202Z",
+      "error": "LiteLLM output was truncated; refusing incomplete evidence",
+      "code": "execution_error"
+    },
+    {
+      "startedAt": "2026-10-10T10:37:14.243Z",
+      "status": "paused",
+      "fromStage": "baseline-development",
+      "completedAt": "2026-10-10T10:41:57.139Z",
+      "error": "Semantic evaluation failed for experiment-selection-2026-10-10: Execution slice finished; continue from checkpoint",
+      "code": "execution_slice"
+    },
+    {
+      "startedAt": "2026-10-10T10:42:28.173Z",
+      "status": "paused",
+      "fromStage": "baseline-validation",
+      "completedAt": "2026-10-10T10:47:17.889Z",
+      "error": "Semantic evaluation failed for backup-restore-2026-10-10: Execution slice finished; continue from checkpoint",
+      "code": "execution_slice"
+    },
+    {
+      "startedAt": "2026-10-10T10:47:49.062Z",
+      "status": "paused",
+      "fromStage": "evaluate-C1-validation",
+      "completedAt": "2026-10-10T10:52:37.505Z",
+      "error": "Execution slice finished; continue from checkpoint",
+      "code": "execution_slice"
+    },
+    {
+      "startedAt": "2026-10-10T10:53:08.880Z",
+      "status": "completed",
+      "fromStage": "evaluate-C2-validation",
+      "completedAt": "2026-10-10T10:56:18.563Z"
+    }
+  ],
+  "unitTests": {
+    "passed": 64,
+    "kind": "mock-tests-not-real-model-quality-evidence"
+  },
+  "duplicateTrigger": {
+    "queued": false,
+    "job": {
+      "date": "2026-10-10",
+      "timestamp": 1791626119020,
+      "status": "running",
+      "executions": 6,
+      "failures": 4,
+      "deadlineAt": "2026-10-10T23:50:00+08:00",
+      "maxFailures": 5,
+      "maxExecutions": 16,
+      "nextRetryAt": null,
+      "startedAt": "2026-10-10T09:55:19.075Z",
+      "updatedAt": "2026-10-10T10:42:27.915Z",
+      "error": null,
+      "code": null,
+      "manualRecoveries": 1,
+      "retryFailures": 0
+    }
+  },
+  "costAvailability": "Provider did not report cost; zero is not proof of free usage.",
+  "transportTokenAccounting": "Transport token counters cover requests since this repair deployment; the 14 earlier HTTP attempts remain counted but their transport token counters were not available in the legacy checkpoint.",
+  "operationalEvents": [
+    {
+      "now": "2026-10-10T18:43:15.4093876+08:00",
+      "jobStatus": "running",
+      "executions": 6,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "baseline-validation",
+        "calls": 25,
+        "completedTasks": 33,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 3,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:44:18.9323676+08:00",
+      "jobStatus": "running",
+      "executions": 6,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "candidate-C2",
+        "calls": 28,
+        "completedTasks": 40,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 3,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:45:48.1237372+08:00",
+      "jobStatus": "running",
+      "executions": 6,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "evaluate-C1-development",
+        "calls": 32,
+        "completedTasks": 46,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 3,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:46:39.9423704+08:00",
+      "jobStatus": "running",
+      "executions": 6,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "evaluate-C1-development",
+        "calls": 33,
+        "completedTasks": 46,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 4,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:48:17.1916400+08:00",
+      "jobStatus": "running",
+      "executions": 7,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "evaluate-C1-validation",
+        "calls": 37,
+        "completedTasks": 53,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 4,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:49:32.4054504+08:00",
+      "jobStatus": "running",
+      "executions": 7,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "evaluate-C2-development",
+        "calls": 42,
+        "completedTasks": 60,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 5,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:51:10.9798958+08:00",
+      "jobStatus": "running",
+      "executions": 7,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "evaluate-C2-development",
+        "calls": 45,
+        "completedTasks": 65,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 5,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:52:54.6176082+08:00",
+      "jobStatus": "paused",
+      "executions": 7,
+      "nextRetry": "2026-10-10T10:53:08.625Z",
+      "status": "paused",
+      "code": "execution_slice",
+      "error": "Execution slice finished; continue from checkpoint",
+      "progress": {
+        "stage": "evaluate-C2-validation",
+        "calls": 48,
+        "completedTasks": 72,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 5,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:53:36.1717744+08:00",
+      "jobStatus": "running",
+      "executions": 8,
+      "nextRetry": null,
+      "status": "running",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "evaluate-C2-validation",
+        "calls": 50,
+        "completedTasks": 73,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 0,
+      "rejectedJudgeResponses": 5,
+      "truncations": 0
+    },
+    {
+      "now": "2026-10-10T18:54:32.9025631+08:00",
+      "jobStatus": "running",
+      "executions": 8,
+      "nextRetry": null,
+      "status": "completed",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "audit",
+        "calls": 54,
+        "completedTasks": 77,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 2,
+      "rejectedJudgeResponses": 7,
+      "truncations": 0,
+      "auditStatus": "pending"
+    },
+    {
+      "now": "2026-10-10T18:56:26.4737427+08:00",
+      "jobStatus": "completed",
+      "executions": 8,
+      "nextRetry": null,
+      "status": "completed",
+      "code": null,
+      "error": null,
+      "progress": {
+        "stage": "audit",
+        "completedTasks": 86,
+        "calls": 58,
+        "callLimit": 64,
+        "resumable": true
+      },
+      "candidateCount": 2,
+      "rejectedJudgeResponses": 7,
+      "truncations": 0,
+      "auditStatus": "completed",
+      "auditOutputs": 3
+    }
+  ]
+}

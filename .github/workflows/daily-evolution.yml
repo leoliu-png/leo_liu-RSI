@@ -1,6 +1,17 @@
 name: Archive daily RSI experiment
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "test/**"
+      - "test-support/**"
+      - "public/**"
+      - "wrangler.jsonc"
+      - "scripts/snapshot*.mjs"
+      - "package*.json"
+      - ".github/workflows/daily-evolution.yml"
   schedule:
     - cron: "0 2 * * *"
     - cron: "0 8 * * *"
