@@ -28,6 +28,17 @@ export async function openJournal(kv, date, state) {
     writes = write.catch(() => {});
     return write;
   };
+  const rejectResponse = async (name, error) => {
+    const cached = checkpoint.tasks[name];
+    if (cached?.status !== "completed") return;
+    const rejectedAt = new Date().toISOString();
+    checkpoint.rejectedResponses ||= [];
+    checkpoint.rejectedResponses.push({ step: name, response: structuredClone(cached.value),
+      rejectedAt, error: String(error.message), code: "judge_structure" });
+    checkpoint.tasks[name] = { ...cached, status: "rejected", rejectedAt,
+      error: String(error.message), code: "judge_structure" };
+    await save();
+  };
   const journal = { checkpoint, save, async task(name, work) {
     const cached = checkpoint.tasks[name];
     if (cached?.status === "completed") return structuredClone(cached.value);
@@ -44,9 +55,22 @@ export async function openJournal(kv, date, state) {
       await save();
       throw error;
     }
-  }, ai(name, ai) {
-    let index = 0;
-    return { run: (model, input) => journal.task(`${name}:response:${++index}`, () => ai.run(model, input)) };
+  }, ai(name, ai, options = {}) {
+    let index = 0, lastResponse;
+    return {
+      async run(model, input) {
+        const key = lastResponse = `${name}:response:${++index}`;
+        const cached = checkpoint.tasks[key];
+        // HTTP success is not proof of a usable judgment. Validate legacy cached
+        // responses before replaying them, without discarding the original evidence.
+        if (cached?.status === "completed" && options.validateCached) {
+          try { await options.validateCached(structuredClone(cached.value)); }
+          catch (error) { await rejectResponse(key, error); }
+        }
+        return journal.task(key, () => ai.run(model, input));
+      },
+      reject: error => rejectResponse(lastResponse, error)
+    };
   }, async stage(name) { checkpoint.stage = name; await save(); } };
   return journal;
 }

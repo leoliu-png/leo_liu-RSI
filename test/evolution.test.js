@@ -369,6 +369,39 @@ test("a failed baseline judgment resumes the saved summary without redoing calib
   assert.equal(result.state.generation, 1);
 });
 
+test("structural judge failure resumes only the rejected calibration and preserves prior evidence and counters", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  const target = calibrationCases.find(item => item.id === "wrong-cache-97");
+  let malformed = true;
+  const calibrationCalls = new Map();
+  mock.env.AI.run = async (model, input) => {
+    if (input.messages[0].content.startsWith("rsi-evaluator-v4")) {
+      const payload = JSON.parse(input.messages[1].content);
+      const item = calibrationCases.find(row => row.summary === payload.summary);
+      if (item) calibrationCalls.set(item.id, (calibrationCalls.get(item.id) || 0) + 1);
+      if (malformed && payload.summary === target.summary) return { response: '{"type":"object"}\n{"units":[]}' };
+    }
+    return original(model, input);
+  };
+  const time = Date.parse("2026-09-24T01:00:00Z");
+  await assert.rejects(runEvolution(mock.env, time), error => error.code === "judge_structure");
+  const first = await getState(mock.env);
+  assert.equal(first.latestRun.rejectedJudgeResponses.length, 2);
+  assert.equal(first.champion.version, "v0");
+  const firstCalls = first.latestRun.usage.calls;
+  malformed = false;
+  const result = await runEvolution(mock.env, time);
+  assert.equal(result.state.latestRun.id, first.latestRun.id);
+  assert.equal(result.state.latestRun.status, "completed");
+  assert.equal(result.state.latestRun.attempts.length, 2);
+  assert.equal(result.state.latestRun.rejectedJudgeResponses.length, 2);
+  assert.ok(result.state.latestRun.usage.calls > firstCalls);
+  assert.ok(result.state.latestRun.usage.calls <= 64);
+  assert.equal(calibrationCalls.get(target.id), 3, "two failed outputs and one genuinely new judgment");
+  for (const item of calibrationCases.filter(row => row.id !== target.id)) assert.equal(calibrationCalls.get(item.id), 1);
+  assert.equal(result.state.history.length, 1);
+});
+
 test("audit outage preserves promotion and resumes only the unfinished audit", async () => {
   const mock = fakeEnvironment(), original = mock.env.AI.run;
   let failed = false, coreCallsAfterFailure;

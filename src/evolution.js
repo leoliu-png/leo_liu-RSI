@@ -437,13 +437,17 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
   const developmentSamples = developmentForDate(date), validationSamples = validationForDate(date);
   const progress = () => ({ stage: cp.stage, completedTasks: Object.values(cp.tasks).filter(item => item.status === "completed").length,
     calls: context.usage.calls, callLimit: DAILY_CALL_LIMIT, resumable: true });
-  const rawEvidence = () => Object.entries(cp.tasks).filter(([key, item]) => key.includes(":response:") && item.status === "completed")
-    .slice(-8).map(([step, item]) => ({ step, response: item.value }));
+  const rawEvidence = () => [
+    ...(cp.rejectedResponses || []),
+    ...Object.entries(cp.tasks).filter(([key, item]) => key.includes(":response:") && item.status === "completed")
+      .map(([step, item]) => ({ step, response: item.value }))
+  ].slice(-8);
   const metadata = () => ({
     id: cp.id, schemaVersion: 4, scorerVersion: SCORER_VERSION, date, startedAt: cp.startedAt,
     model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER,
     evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC },
     datasetVersion: DATASET_VERSION, usage: context.usage, progress: progress(), attempts: cp.attempts,
+    rejectedJudgeResponses: cp.rejectedResponses || [],
     developmentSamples, validationSamples, candidates: []
   });
   const persist = async next => {
@@ -606,6 +610,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
     cp.core.latestRun.usage = context.usage;
     cp.core.latestRun.attempts = cp.attempts;
     cp.core.latestRun.progress = progress();
+    cp.core.latestRun.rejectedJudgeResponses = cp.rejectedResponses || [];
     await journal.save();
     await persist(cp.core);
     return { skipped: false, state: published };

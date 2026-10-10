@@ -163,22 +163,30 @@ export async function judgeSummary(context, sample, summary) {
     summary, units: summaryUnits(summary) };
   let lastError;
   let previousResponse;
-  const ai = context.journal ? context.journal.ai(`judge:${key}`, context.ai) : context.ai;
+  const decodeJudgment = response => validateJudgment(
+    materializeQuotes(structuredClone(responseJson(response)), summary), sample, summary);
+  const ai = context.journal ? context.journal.ai(`judge:${key}`, context.ai, {
+    validateCached: decodeJudgment
+  }) : context.ai;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await ai.run(context.model, {
-        messages: [{ role: "system", content: JUDGE_PROMPT + "\n严格只输出符合下列 schema 的 JSON 对象，不要 Markdown：" + JSON.stringify(JUDGE_SCHEMA) }, { role: "user", content: JSON.stringify(payload) },
-          ...(previousResponse ? [{ role: "assistant", content: JSON.stringify(previousResponse) },
+        messages: [{ role: "system", content: JUDGE_PROMPT + "\n严格只输出一个符合下列 schema 的核验结果 JSON 对象，不要 Markdown。schema 只是结构约束，不要复制 schema 本身，也不要在结果前后附加其他对象或文字：" + JSON.stringify(JUDGE_SCHEMA) }, { role: "user", content: JSON.stringify(payload) },
+          ...(previousResponse ? [{ role: "assistant", content: typeof previousResponse === "string" ? previousResponse : JSON.stringify(previousResponse) },
             { role: "user", content: `结构校验失败：${lastError.message}。重新返回完整 JSON，仅修复结构和证据编号；不得为了通过结构校验改变事实判断。unitIds 只能使用输入中存在的 T 编号，没有表达则标 omitted 并留空。` }] : [])],
         max_tokens: 4200, temperature: 0, seed: 7341
       });
-      previousResponse = responseJson(response);
-      const judgment = validateJudgment(materializeQuotes(structuredClone(previousResponse), summary), sample, summary);
+      previousResponse = typeof response === "string" ? response : response?.response || response?.choices?.[0]?.message?.content;
+      const judgment = decodeJudgment(response);
       const result = { ...scoreJudgment(summary, sample, judgment),
         evaluator: { model: context.model, version: EVALUATOR_VERSION, attempts: attempt } };
       context.cache.set(key, result);
       return structuredClone(result);
-    } catch (error) { lastError = error; if (error.providerFailure || error.code) break; }
+    } catch (error) {
+      lastError = error;
+      if (error.providerFailure || error.code) break;
+      await ai.reject?.(error);
+    }
   }
   throw Object.assign(new Error(`Semantic evaluation failed for ${sample.id}: ${lastError?.message}`), {
     code: lastError?.code || "judge_structure", retryable: lastError?.retryable === true,
