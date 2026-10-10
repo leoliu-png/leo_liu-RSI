@@ -1,7 +1,7 @@
 import { benchmark, initialPrompt, modelName } from "./benchmark.js";
 import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, validationCorpus, validationForDate } from "./corpus.js";
 import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
-import { MODEL_PROFILE, MODEL_SUPPORTS_SEED, OPENROUTER_BASE_URL, PREVIOUS_STATE_KEYS } from "./model.js";
+import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
 
 export const STATE_KEY = `rsi:v4:${MODEL_PROFILE}:state`;
@@ -453,7 +453,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient = cr
           samples: auditCorpus, metrics: await runPrompt(context, champion.prompt, auditCorpus) };
     const run = {
       id: crypto.randomUUID(), schemaVersion: 4, date, status: "completed", startedAt, completedAt: new Date().toISOString(),
-      model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", scorerVersion: SCORER_VERSION,
+      model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER, scorerVersion: SCORER_VERSION,
       evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC }, datasetVersion: DATASET_VERSION,
       calibration, usage: context.usage, audit,
       strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: MODEL_SUPPORTS_SEED ? 42 : null,
@@ -497,9 +497,9 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient = cr
     return { skipped: false, state: next };
   } catch (error) {
     await context.cancel();
-    const message = redactError(error instanceof Error ? error.message : String(error), env.OPENROUTER_API_KEY);
+    const message = redactError(error instanceof Error ? error.message : String(error), env.MODEL_API_KEY);
     const run = { id: crypto.randomUUID(), schemaVersion: 4, scorerVersion: SCORER_VERSION, date, status: "failed", startedAt,
-      completedAt: new Date().toISOString(), model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", evaluator: { model: context.model, version: EVALUATOR_VERSION },
+      completedAt: new Date().toISOString(), model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER, evaluator: { model: context.model, version: EVALUATOR_VERSION },
       calibration, usage: context.usage, error: message };
     const next = { ...state, latestRun: run, updatedAt: run.completedAt };
     await env.EVOLUTION.put(`${RUN_PREFIX}${date}`, JSON.stringify(run));
@@ -516,7 +516,7 @@ export async function rescoreLatest() {
 export function publicState(state) {
   return {
     schemaVersion: state.schemaVersion, scorerVersion: SCORER_VERSION,
-    model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", baseUrl: OPENROUTER_BASE_URL,
+    model: modelName, modelProfile: MODEL_PROFILE, provider: MODEL_PROVIDER, baseUrl: MODEL_BASE_URL,
     generation: state.generation, champion: state.champion, legacyBaseline: state.legacyBaseline || null,
     strategy: state.strategy, challenger: state.challenger, strategyHistory: state.strategyHistory,
     latestRun: state.latestRun, history: state.history, updatedAt: state.updatedAt,

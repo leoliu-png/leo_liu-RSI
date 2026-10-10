@@ -1,25 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MODEL_NAME, OPENROUTER_BASE_URL } from "../src/model.js";
+import { MODEL_NAME, MODEL_BASE_URL } from "../src/model.js";
 import { createModelClient } from "../src/openrouter.js";
 import { createEvaluationContext, judgeSummary } from "../src/evaluator.js";
 import { developmentCorpus } from "../src/corpus.js";
 
-const env = { OPENROUTER_API_KEY: "test-private-token", MODEL_NAME, JUDGE_MODEL: MODEL_NAME, OPENROUTER_BASE_URL };
+const env = { MODEL_API_KEY: "test-private-token", MODEL_NAME, JUDGE_MODEL: MODEL_NAME, MODEL_BASE_URL };
 const input = { messages: [{ role: "user", content: "test" }], temperature: 0, max_tokens: 300, seed: 42 };
 const good = () => Response.json({ model: MODEL_NAME, choices: [{ message: { content: "OK" }, finish_reason: "stop" }],
   usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0 } });
 const options = fetch => ({ fetch, intervalMs: 0, sleep: async () => {} });
 
-test("OpenRouter sends the requested model and server-side credential, with reasoning disabled", async () => {
+test("LiteLLM sends the requested model and server-side credential without provider-specific parameters", async () => {
   const client = createModelClient(env, options(async (url, init) => {
-    assert.equal(url, `${OPENROUTER_BASE_URL}/chat/completions`);
-    assert.equal(init.headers.Authorization, `Bearer ${env.OPENROUTER_API_KEY}`);
+    assert.equal(url, `${MODEL_BASE_URL}/chat/completions`);
+    assert.equal(init.headers.Authorization, `Bearer ${env.MODEL_API_KEY}`);
     const body = JSON.parse(init.body);
     assert.equal(body.model, MODEL_NAME);
-    assert.deepEqual(body.reasoning, { enabled: false });
+    assert.equal(Object.hasOwn(body, "reasoning"), false);
     assert.deepEqual(body.messages, input.messages);
-    assert.equal(Object.hasOwn(body, "seed"), false, "Laguna does not support seed");
+    assert.equal(Object.hasOwn(body, "seed"), false, "seed is not enabled for this endpoint");
     return good();
   }));
   assert.equal((await client.run(MODEL_NAME, input)).choices[0].message.content, "OK");
@@ -32,7 +32,7 @@ test("missing credentials, wrong model or unexpected URL fail before sending a r
   const fetch = async () => { assert.fail("must not send credentials"); };
   await assert.rejects(createModelClient({}, options(fetch)).run(MODEL_NAME, input), /not configured/);
   await assert.rejects(createModelClient(env, options(fetch)).run("another-model", input), /selected model/);
-  await assert.rejects(createModelClient({ ...env, OPENROUTER_BASE_URL: "https://another-host" }, options(fetch)).run(MODEL_NAME, input), /refusing to send/);
+  await assert.rejects(createModelClient({ ...env, MODEL_BASE_URL: "https://another-host" }, options(fetch)).run(MODEL_NAME, input), /refusing to send/);
 });
 
 test("transient rate limits get one bounded retry and physical attempts are budgeted", async () => {
@@ -50,8 +50,8 @@ test("transient rate limits get one bounded retry and physical attempts are budg
 test("daily exhaustion and auth errors are not retried, and secrets cannot enter failure evidence", async () => {
   for (const status of [401, 429]) {
     const client = createModelClient(env, options(async () => Response.json({ error: { code: status,
-      message: `daily quota exhausted ${env.OPENROUTER_API_KEY}` } }, { status })));
-    await assert.rejects(client.run(MODEL_NAME, input), error => !error.message.includes(env.OPENROUTER_API_KEY) && error.message.includes("[REDACTED]"));
+      message: `daily quota exhausted ${env.MODEL_API_KEY}` } }, { status })));
+    await assert.rejects(client.run(MODEL_NAME, input), error => !error.message.includes(env.MODEL_API_KEY) && error.message.includes("[REDACTED]"));
     assert.equal(client.stats.attempts, 1);
   }
 });

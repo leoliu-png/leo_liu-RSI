@@ -16,9 +16,9 @@
     }
   ],
   "vars": {
-    "MODEL_NAME": "poolside/laguna-s-2.1:free",
-    "JUDGE_MODEL": "poolside/laguna-s-2.1:free",
-    "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1"
+    "MODEL_NAME": "minimax-m3",
+    "JUDGE_MODEL": "minimax-m3",
+    "MODEL_BASE_URL": "https://litellm.feedmob.it.com"
   },
   "triggers": {
     "crons": ["0 1 * * *"]

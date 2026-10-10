@@ -1,8 +1,8 @@
-import { MODEL_NAME, MODEL_SUPPORTS_SEED, OPENROUTER_BASE_URL } from "./model.js";
+import { MODEL_NAME, MODEL_SUPPORTS_SEED, MODEL_BASE_URL } from "./model.js";
 const providerFailure = message => Object.assign(new Error(message), { providerFailure: true });
 
 export function redactError(value, key) {
-  let message = String(value).replace(/sk-or-v1-[a-zA-Z0-9]+/g, "[REDACTED]");
+  let message = String(value).replace(/sk-[a-zA-Z0-9_-]+/g, "[REDACTED]");
   if (key) message = message.split(key).join("[REDACTED]");
   return message.slice(0, 600);
 }
@@ -31,36 +31,36 @@ export function createModelClient(env, options = {}) {
   }
 
   return { stats, cancel() { canceled = true; for (const controller of active) controller.abort(); }, async run(model, input) {
-    if (!env.OPENROUTER_API_KEY) throw providerFailure("OPENROUTER_API_KEY secret is not configured");
+    if (!env.MODEL_API_KEY) throw providerFailure("MODEL_API_KEY secret is not configured");
     if (model !== MODEL_NAME || (env.MODEL_NAME && env.MODEL_NAME !== MODEL_NAME) ||
         (env.JUDGE_MODEL && env.JUDGE_MODEL !== MODEL_NAME)) throw providerFailure("Model configuration does not match the selected model");
-    if (env.OPENROUTER_BASE_URL && env.OPENROUTER_BASE_URL !== OPENROUTER_BASE_URL) {
-      throw providerFailure("Unexpected OpenRouter base URL; refusing to send credentials");
+    if (env.MODEL_BASE_URL && env.MODEL_BASE_URL !== MODEL_BASE_URL) {
+      throw providerFailure("Unexpected LiteLLM base URL; refusing to send credentials");
     }
     for (let attempt = 0; attempt < 2; attempt++) {
       await startGate();
-      if (stats.attempts >= maxAttempts) throw providerFailure(`OpenRouter HTTP attempt budget exhausted (${maxAttempts})`);
+      if (stats.attempts >= maxAttempts) throw providerFailure(`LiteLLM HTTP attempt budget exhausted (${maxAttempts})`);
       stats.attempts++;
       let response, data;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120000);
       active.add(controller);
       try {
-        response = await request(`${OPENROUTER_BASE_URL}/chat/completions`, {
-          method: "POST", headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+        response = await request(`${MODEL_BASE_URL}/chat/completions`, {
+          method: "POST", headers: { Authorization: `Bearer ${env.MODEL_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model, messages: input.messages, max_tokens: input.max_tokens,
-            temperature: input.temperature, ...(MODEL_SUPPORTS_SEED ? { seed: input.seed } : {}), reasoning: { enabled: false } }),
+            temperature: input.temperature, ...(MODEL_SUPPORTS_SEED ? { seed: input.seed } : {}) }),
           signal: controller.signal
         });
         data = await response.json();
       } catch (error) {
-        throw providerFailure(`OpenRouter request failed: ${redactError(error.message, env.OPENROUTER_API_KEY)}`);
+        throw providerFailure(`LiteLLM request failed: ${redactError(error.message, env.MODEL_API_KEY)}`);
       } finally {
         clearTimeout(timeout);
         active.delete(controller);
       }
       if (typeof data.usage?.cost === "number") { stats.cost += data.usage.cost; stats.reportedCostCalls++; }
-      const message = redactError(data.error?.message || `HTTP ${response.status}`, env.OPENROUTER_API_KEY);
+      const message = redactError(data.error?.message || `HTTP ${response.status}`, env.MODEL_API_KEY);
       if (!response.ok || data.error) {
         const status = Number(data.error?.code) || response.status;
         const exhausted = /daily|quota|credits|balance|每天|每日|额度/i.test(message);
@@ -72,14 +72,14 @@ export function createModelClient(env, options = {}) {
           await pause(Math.max(1000, retryMs));
           continue;
         }
-        throw providerFailure(`OpenRouter ${status}: ${message}`);
+        throw providerFailure(`LiteLLM ${status}: ${message}`);
       }
       const choice = data.choices?.[0];
-      if (choice?.finish_reason === "length") throw providerFailure("OpenRouter output was truncated; refusing incomplete evidence");
+      if (choice?.finish_reason === "length") throw providerFailure("LiteLLM output was truncated; refusing incomplete evidence");
       if (typeof choice?.message?.content !== "string" || !choice.message.content.trim()) {
-        throw providerFailure("OpenRouter returned no usable text");
+        throw providerFailure("LiteLLM returned no usable text");
       }
-      if (data.model && data.model !== MODEL_NAME) throw providerFailure("OpenRouter returned an unexpected model; refusing fallback");
+      if (data.model && data.model !== MODEL_NAME) throw providerFailure("LiteLLM returned an unexpected model; refusing fallback");
       return data;
     }
   } };

@@ -317,12 +317,12 @@ test("model switch keeps old V4 evidence but resets scores, trials, audit and sa
   assert.deepEqual(JSON.parse(mock.values.get("rsi:v4:state")), JSON.parse(JSON.stringify(legacy)));
 });
 
-test("Laguna migration prefers the Nemotron champion and preserves its original experiment records", async () => {
+test("Minimax migration prefers the Laguna champion and preserves its original experiment records", async () => {
   const mock = fakeEnvironment();
-  const profile = "openrouter-nemotron3-ultra", key = `rsi:v4:${profile}:state`;
+  const profile = "openrouter-laguna-s21", key = `rsi:v4:${profile}:state`;
   const old = { ...initialState(), modelProfile: profile, generation: 2,
     champion: { version: "v2", prompt: "most recent champion", score: 88 },
-    latestRun: { id: "nemotron-run", status: "completed", date: "2026-10-10", model: "old-model" },
+    latestRun: { id: "laguna-run", status: "completed", date: "2026-10-10", model: "old-model" },
     feedbackHistory: [{ score: 88 }], recentCandidatePrompts: ["old candidate"], seenCandidateKeys: ["oldcandidate"],
     history: [{ date: "2026-10-10", scorerVersion: 4, modelProfile: profile, score: 88 }] };
   mock.values.set(key, JSON.stringify(old));
