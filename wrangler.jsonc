@@ -16,8 +16,8 @@
     }
   ],
   "vars": {
-    "MODEL_NAME": "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "JUDGE_MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "MODEL_NAME": "poolside/laguna-s-2.1:free",
+    "JUDGE_MODEL": "poolside/laguna-s-2.1:free",
     "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1"
   },
   "triggers": {

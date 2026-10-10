@@ -2,7 +2,7 @@ import { calibrationCases, DATASET_VERSION } from "./corpus.js";
 import { MODEL_NAME } from "./model.js";
 
 export const SCORER_VERSION = 4;
-export const EVALUATOR_VERSION = "semantic-v4.1-nemotron";
+export const EVALUATOR_VERSION = "semantic-v4.1-laguna";
 export const DEFAULT_JUDGE_MODEL = MODEL_NAME;
 export const RUBRIC = { accuracy: 40, completeness: 25, constraints: 20, clarity: 10, format: 5 };
 const HEADINGS = ["结论", "要点", "风险", "术语"];

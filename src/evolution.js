@@ -1,11 +1,10 @@
 import { benchmark, initialPrompt, modelName } from "./benchmark.js";
 import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, validationCorpus, validationForDate } from "./corpus.js";
 import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
-import { MODEL_PROFILE, OPENROUTER_BASE_URL } from "./model.js";
+import { MODEL_PROFILE, MODEL_SUPPORTS_SEED, OPENROUTER_BASE_URL, PREVIOUS_STATE_KEYS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
 
 export const STATE_KEY = `rsi:v4:${MODEL_PROFILE}:state`;
-const LEGACY_STATE_KEY = "rsi:v3:state";
 export const RUN_PREFIX = `rsi:v4:${MODEL_PROFILE}:run:`;
 const HEADINGS = ["结论", "要点", "风险", "术语"];
 const MAX_CANDIDATE_ATTEMPTS = 3;
@@ -299,8 +298,12 @@ function migrateLegacy(stored) {
 export async function getState(env) {
   const stored = await env.EVOLUTION.get(STATE_KEY, "json");
   if (stored?.schemaVersion === 4 && stored.modelProfile === MODEL_PROFILE) return stored;
-  return migrateLegacy(stored || await env.EVOLUTION.get("rsi:v4:state", "json") ||
-    await env.EVOLUTION.get(LEGACY_STATE_KEY, "json") || await env.EVOLUTION.get("rsi:v2:state", "json"));
+  if (stored) return migrateLegacy(stored);
+  for (const key of PREVIOUS_STATE_KEYS) {
+    const previous = await env.EVOLUTION.get(key, "json");
+    if (previous) return migrateLegacy(previous);
+  }
+  return initialState();
 }
 
 export function promotionDecision(candidate, baseline, holdoutBaseline) {
@@ -453,7 +456,8 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient = cr
       model: modelName, modelProfile: MODEL_PROFILE, provider: "OpenRouter", scorerVersion: SCORER_VERSION,
       evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC }, datasetVersion: DATASET_VERSION,
       calibration, usage: context.usage, audit,
-      strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: 42 },
+      strategyContext: { focus, maxAttempts: MAX_CANDIDATE_ATTEMPTS, evaluationSeed: MODEL_SUPPORTS_SEED ? 42 : null,
+        seedSupported: MODEL_SUPPORTS_SEED, evaluationTemperature: 0 },
       benchmarkIds: developmentSamples.map(item => item.id), developmentSamples, validationSamples,
       baseline, holdoutBaseline, candidates: evaluated, candidateGeneration, outcome,
       accepted: Boolean(winner), selectedId: winner?.id ?? null,

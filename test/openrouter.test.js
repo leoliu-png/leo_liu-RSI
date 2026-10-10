@@ -19,6 +19,7 @@ test("OpenRouter sends the requested model and server-side credential, with reas
     assert.equal(body.model, MODEL_NAME);
     assert.deepEqual(body.reasoning, { enabled: false });
     assert.deepEqual(body.messages, input.messages);
+    assert.equal(Object.hasOwn(body, "seed"), false, "Laguna does not support seed");
     return good();
   }));
   assert.equal((await client.run(MODEL_NAME, input)).choices[0].message.content, "OK");

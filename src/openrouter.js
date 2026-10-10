@@ -1,4 +1,4 @@
-import { MODEL_NAME, OPENROUTER_BASE_URL } from "./model.js";
+import { MODEL_NAME, MODEL_SUPPORTS_SEED, OPENROUTER_BASE_URL } from "./model.js";
 const providerFailure = message => Object.assign(new Error(message), { providerFailure: true });
 
 export function redactError(value, key) {
@@ -49,7 +49,7 @@ export function createModelClient(env, options = {}) {
         response = await request(`${OPENROUTER_BASE_URL}/chat/completions`, {
           method: "POST", headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model, messages: input.messages, max_tokens: input.max_tokens,
-            temperature: input.temperature, seed: input.seed, reasoning: { enabled: false } }),
+            temperature: input.temperature, ...(MODEL_SUPPORTS_SEED ? { seed: input.seed } : {}), reasoning: { enabled: false } }),
           signal: controller.signal
         });
         data = await response.json();
