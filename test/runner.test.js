@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { EvolutionRunner, MAX_FAILURES, RETRY_DELAYS, durableRecords } from "../src/runner.js";
+import { EvolutionRunner, MAX_FAILURES, MAX_MANUAL_RECOVERIES, RETRY_DELAYS, durableRecords } from "../src/runner.js";
 import { MODEL_PROFILE } from "../src/model.js";
+import { CHECKPOINT_PREFIX } from "../src/journal.js";
+import { STATE_KEY, initialState } from "../src/evolution.js";
 
 function harness(execute) {
   let now = Date.parse("2026-10-10T01:00:00Z"), alarm = null;
@@ -172,4 +174,75 @@ test("operator recovery resumes a blocked day without resetting budgets or rerun
   assert.equal(calls, 2);
   assert.equal((await mock.storage.get("daily-job")).status, "completed");
   assert.equal((await mock.runner.schedule(mock.now(), true)).queued, false);
+});
+
+test("post-fix operator recovery preserves total failures, execution and billing counters while rearming bounded retries", async () => {
+  let fixed = false;
+  const mock = harness(async () => {
+    if (!fixed) throw Object.assign(new Error("temporary failure"), { code: "http_503", retryable: true });
+    return { state: { latestRun: { audit: { status: "completed" } } } };
+  });
+  await mock.runner.schedule();
+  for (let index = 0; index < MAX_FAILURES; index++) {
+    await mock.runner.alarm();
+    if (mock.alarm()) mock.advance(mock.alarm());
+  }
+  const stopped = await mock.storage.get("daily-job");
+  assert.equal(stopped.status, "exhausted");
+  const key = `${CHECKPOINT_PREFIX}${stopped.date}`;
+  mock.records.set(key, JSON.stringify({ usage: { calls: 14, transport: { attempts: 15 } } }));
+  fixed = true;
+  const resumed = await mock.runner.schedule(mock.now(), true);
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.job.failures, MAX_FAILURES);
+  assert.equal(resumed.job.executions, MAX_FAILURES);
+  assert.equal(resumed.job.retryFailures, 0);
+  assert.equal(resumed.job.manualRecoveries, 1);
+  assert.equal(resumed.job.error, null);
+  assert.deepEqual(JSON.parse(mock.records.get(key)).usage, { calls: 14, transport: { attempts: 15 } });
+  await mock.runner.alarm();
+  assert.equal((await mock.storage.get("daily-job")).status, "completed");
+  assert.equal((await mock.storage.get("daily-job")).error, null);
+});
+
+test("manual recovery cannot bypass daily billing limits, the deadline, or its own finite attempt count", async () => {
+  for (const usage of [{ calls: 64 }, { calls: 12, transport: { attempts: 64 } }]) {
+    const mock = harness(async () => { throw Object.assign(new Error("quota"), { code: "quota_exhausted", retryable: false }); });
+    await mock.runner.schedule(); await mock.runner.alarm();
+    mock.records.set(`${CHECKPOINT_PREFIX}2026-10-10`, JSON.stringify({ usage }));
+    assert.equal((await mock.runner.schedule(mock.now(), true)).reason, "daily_budget_exhausted");
+    assert.equal((await mock.storage.get("daily-job")).executions, 1);
+  }
+  const mock = harness(async () => { throw Object.assign(new Error("auth"), { retryable: false }); });
+  await mock.runner.schedule(); await mock.runner.alarm();
+  for (let index = 0; index < MAX_MANUAL_RECOVERIES; index++) {
+    assert.equal((await mock.runner.schedule(mock.now(), true)).resumed, true);
+    await mock.runner.alarm();
+  }
+  assert.equal((await mock.runner.schedule(mock.now(), true)).queued, false);
+  const job = await mock.storage.get("daily-job");
+  job.manualRecoveries = 0;
+  await mock.storage.put("daily-job", job);
+  mock.advance(Date.parse(job.deadlineAt) + 1);
+  assert.equal((await mock.runner.schedule(mock.now(), true)).queued, false);
+});
+
+test("live status reads authoritative checkpoint progress without advertising an incomplete run as completed", async () => {
+  const mock = harness(async () => {});
+  await mock.runner.schedule();
+  const job = await mock.storage.get("daily-job");
+  job.status = "running";
+  await mock.storage.put("daily-job", job);
+  const state = initialState();
+  state.latestRun = { id: "test-run", date: job.date, status: "running", usage: { calls: 7 } };
+  mock.records.set(STATE_KEY, JSON.stringify(state));
+  mock.records.set(`${CHECKPOINT_PREFIX}${job.date}`, JSON.stringify({ id: "test-run", stage: "baseline-development",
+    tasks: { one: { status: "completed" }, two: { status: "running" } }, usage: { calls: 14, transport: { attempts: 15 } } }));
+  const response = await mock.runner.fetch(new Request("https://runner/state"));
+  const result = await response.json();
+  assert.equal(result.latestRun.status, "running");
+  assert.equal(result.latestRun.usage.calls, 14);
+  assert.equal(result.latestRun.progress.completedTasks, 1);
+  assert.equal(result.latestRun.progress.stage, "baseline-development");
+  assert.equal(result.latestRun.usage.transport.attempts, 15);
 });

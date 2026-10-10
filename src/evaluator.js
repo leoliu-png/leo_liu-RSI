@@ -1,5 +1,5 @@
 import { calibrationCases, DATASET_VERSION } from "./corpus.js";
-import { MODEL_NAME } from "./model.js";
+import { MODEL_NAME, MODEL_TOKEN_LIMITS } from "./model.js";
 
 export const SCORER_VERSION = 4;
 export const EVALUATOR_VERSION = "semantic-v4.2-minimax-m3";
@@ -174,7 +174,7 @@ export async function judgeSummary(context, sample, summary) {
         messages: [{ role: "system", content: JUDGE_PROMPT + "\n严格只输出一个符合下列 schema 的核验结果 JSON 对象，不要 Markdown。schema 只是结构约束，不要复制 schema 本身，也不要在结果前后附加其他对象或文字：" + JSON.stringify(JUDGE_SCHEMA) }, { role: "user", content: JSON.stringify(payload) },
           ...(previousResponse ? [{ role: "assistant", content: typeof previousResponse === "string" ? previousResponse : JSON.stringify(previousResponse) },
             { role: "user", content: `结构校验失败：${lastError.message}。重新返回完整 JSON，仅修复结构和证据编号；不得为了通过结构校验改变事实判断。unitIds 只能使用输入中存在的 T 编号，没有表达则标 omitted 并留空。` }] : [])],
-        max_tokens: 4200, temperature: 0, seed: 7341
+        max_tokens: MODEL_TOKEN_LIMITS.judge, temperature: 0, seed: 7341
       });
       previousResponse = typeof response === "string" ? response : response?.response || response?.choices?.[0]?.message?.content;
       const judgment = decodeJudgment(response);
@@ -189,7 +189,7 @@ export async function judgeSummary(context, sample, summary) {
     }
   }
   throw Object.assign(new Error(`Semantic evaluation failed for ${sample.id}: ${lastError?.message}`), {
-    code: lastError?.code || "judge_structure", retryable: lastError?.retryable === true,
+    code: lastError?.code || "judge_structure", retryable: lastError?.code ? lastError.retryable === true : true,
     providerFailure: lastError?.providerFailure || false, retryAfterMs: lastError?.retryAfterMs || 0
   });
 }

@@ -28,15 +28,15 @@ export async function openJournal(kv, date, state) {
     writes = write.catch(() => {});
     return write;
   };
-  const rejectResponse = async (name, error) => {
+  const rejectResponse = async (name, error, code = "judge_structure") => {
     const cached = checkpoint.tasks[name];
     if (cached?.status !== "completed") return;
     const rejectedAt = new Date().toISOString();
     checkpoint.rejectedResponses ||= [];
     checkpoint.rejectedResponses.push({ step: name, response: structuredClone(cached.value),
-      rejectedAt, error: String(error.message), code: "judge_structure" });
+      rejectedAt, error: String(error.message), code });
     checkpoint.tasks[name] = { ...cached, status: "rejected", rejectedAt,
-      error: String(error.message), code: "judge_structure" };
+      error: String(error.message), code };
     await save();
   };
   const journal = { checkpoint, save, async task(name, work) {
@@ -65,11 +65,11 @@ export async function openJournal(kv, date, state) {
         // responses before replaying them, without discarding the original evidence.
         if (cached?.status === "completed" && options.validateCached) {
           try { await options.validateCached(structuredClone(cached.value)); }
-          catch (error) { await rejectResponse(key, error); }
+          catch (error) { await rejectResponse(key, error, options.rejectionCode); }
         }
         return journal.task(key, () => ai.run(model, input));
       },
-      reject: error => rejectResponse(lastResponse, error)
+      reject: error => rejectResponse(lastResponse, error, options.rejectionCode)
     };
   }, async stage(name) { checkpoint.stage = name; await save(); } };
   return journal;

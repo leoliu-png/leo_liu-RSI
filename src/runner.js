@@ -1,10 +1,12 @@
 import { experimentDate, getState, publicState, runEvolution } from "./evolution.js";
 import { createModelClient, redactError } from "./openrouter.js";
 import { MODEL_NAME, MODEL_PROFILE } from "./model.js";
+import { CHECKPOINT_PREFIX, DAILY_CALL_LIMIT } from "./journal.js";
 
 export const RETRY_DELAYS = [5, 15, 60, 180].map(minutes => minutes * 60000);
 export const MAX_FAILURES = 5;
 export const MAX_EXECUTIONS = 16;
+export const MAX_MANUAL_RECOVERIES = 3;
 const JOB_KEY = "daily-job";
 const terminal = new Set(["completed", "completed_with_audit_warning", "blocked", "exhausted", "missed"]);
 
@@ -81,10 +83,20 @@ export class EvolutionRunner {
       if (date !== experimentDate(this.now())) return { queued: false, reason: "expired_schedule" };
       const existing = await this.ctx.storage.get(JOB_KEY);
       if (existing?.date === date) {
-        if (resume && existing.status === "blocked" && !this.busy &&
-            existing.failures < MAX_FAILURES && existing.executions < MAX_EXECUTIONS) {
+        if (resume && ["blocked", "exhausted"].includes(existing.status) && !this.busy &&
+            (existing.manualRecoveries || 0) < MAX_MANUAL_RECOVERIES && existing.executions < MAX_EXECUTIONS &&
+            this.now() < Date.parse(existing.deadlineAt)) {
+          const checkpoint = await this.records.get(`${CHECKPOINT_PREFIX}${date}`, "json");
+          if ((checkpoint?.usage?.calls || 0) >= DAILY_CALL_LIMIT ||
+              (checkpoint?.usage?.transport?.attempts || 0) >= DAILY_CALL_LIMIT || existing.code === "daily_budget") {
+            return { queued: false, reason: "daily_budget_exhausted", job: existing };
+          }
+          existing.manualRecoveries = (existing.manualRecoveries || 0) + 1;
+          existing.retryFailures = 0;
           existing.status = "queued";
           existing.nextRetryAt = null;
+          existing.error = null;
+          existing.code = null;
           await this.saveJob(existing, this.now() + 1000);
           return { queued: true, resumed: true, job: existing };
         }
@@ -96,7 +108,7 @@ export class EvolutionRunner {
         return { queued: true, job: existing };
       }
       if (this.busy) return { queued: false, reason: "previous_job_running", job: existing };
-      const job = { date, timestamp, status: "queued", executions: 0, failures: 0,
+      const job = { date, timestamp, status: "queued", executions: 0, failures: 0, retryFailures: 0, manualRecoveries: 0,
         deadlineAt: `${date}T23:50:00+08:00`,
         maxFailures: MAX_FAILURES, maxExecutions: MAX_EXECUTIONS, nextRetryAt: null,
         startedAt: new Date(this.now()).toISOString() };
@@ -116,8 +128,9 @@ export class EvolutionRunner {
         await this.ctx.storage.deleteAlarm();
         return;
       }
-      if (job.executions >= MAX_EXECUTIONS || job.failures >= MAX_FAILURES) {
+      if (job.executions >= MAX_EXECUTIONS || (job.retryFailures ?? job.failures) >= MAX_FAILURES) {
         await this.saveJob({ ...job, status: "exhausted", nextRetryAt: null });
+        await this.ctx.storage.deleteAlarm();
         return;
       }
       if (job.nextRetryAt && Date.parse(job.nextRetryAt) > this.now()) {
@@ -127,6 +140,8 @@ export class EvolutionRunner {
       job.executions++;
       job.status = "running";
       job.nextRetryAt = null;
+      job.error = null;
+      job.code = null;
       // Persist a recovery alarm before inference, so process termination does not lose the job.
       await this.saveJob(job, this.now() + 12 * 60000);
       let problem;
@@ -138,6 +153,7 @@ export class EvolutionRunner {
         } else if (audit.retryable === false) {
           job.status = "completed_with_audit_warning";
           job.error = audit.error;
+          job.code = audit.code;
         } else {
           problem = { code: audit.code, retryable: true, message: audit.error || "Audit pending", retryAfterMs: audit.retryAfterMs || 0 };
         }
@@ -152,15 +168,18 @@ export class EvolutionRunner {
       job.error = redactError(problem.message, this.env.MODEL_API_KEY);
       job.code = problem.code || "execution_error";
       const paused = problem.code === "execution_slice";
-      if (!paused) job.failures++;
-      if (problem.retryable === false || job.failures >= MAX_FAILURES || job.executions >= MAX_EXECUTIONS) {
+      if (!paused) {
+        job.retryFailures = (job.retryFailures ?? job.failures) + 1;
+        job.failures++;
+      }
+      if (problem.retryable === false || job.retryFailures >= MAX_FAILURES || job.executions >= MAX_EXECUTIONS) {
         job.status = problem.retryable === false ? "blocked" : "exhausted";
         job.nextRetryAt = null;
         await this.saveJob(job);
         await this.ctx.storage.deleteAlarm();
         return;
       }
-      const delay = paused ? 30000 : Math.max(RETRY_DELAYS[job.failures - 1] || RETRY_DELAYS.at(-1), problem.retryAfterMs || 0);
+      const delay = paused ? 30000 : Math.max(RETRY_DELAYS[job.retryFailures - 1] || RETRY_DELAYS.at(-1), problem.retryAfterMs || 0);
       const retryAt = this.now() + delay;
       if (experimentDate(retryAt) !== job.date || retryAt >= Date.parse(job.deadlineAt)) {
         await this.saveJob({ ...job, status: "exhausted", nextRetryAt: null });
@@ -180,8 +199,20 @@ export class EvolutionRunner {
       return Response.json(await this.schedule(timestamp, path === "/resume"));
     }
     if (path === "/state") {
-      return Response.json({ ...publicState(await getState(this.runEnv)),
-        automation: await this.ctx.storage.get(JOB_KEY) || null });
+      const state = publicState(await getState(this.runEnv));
+      const job = await this.ctx.storage.get(JOB_KEY) || null;
+      if (state.latestRun?.date === job?.date && ["running", "queued", "paused", "waiting_retry"].includes(job?.status)) {
+        const checkpoint = await this.records.get(`${CHECKPOINT_PREFIX}${job.date}`, "json");
+        if (checkpoint?.id === state.latestRun.id) {
+          state.latestRun.usage = checkpoint.usage;
+          state.latestRun.progress = { stage: checkpoint.stage, calls: checkpoint.usage?.calls || 0,
+            completedTasks: Object.values(checkpoint.tasks).filter(item => item.status === "completed").length,
+            callLimit: DAILY_CALL_LIMIT, resumable: true };
+          state.latestRun.rejectedJudgeResponses = checkpoint.rejectedResponses || [];
+          state.latestRun.rejectedModelResponses = checkpoint.rejectedModelResponses || [];
+        }
+      }
+      return Response.json({ ...state, automation: job });
     }
     if (path === "/probe" && request.method === "POST") {
       if (this.busy) return Response.json({ error: "Daily experiment is running" }, { status: 409 });

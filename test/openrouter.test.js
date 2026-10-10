@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MODEL_NAME, MODEL_BASE_URL } from "../src/model.js";
+import { MODEL_NAME, MODEL_BASE_URL, MAX_MODEL_OUTPUT_TOKENS } from "../src/model.js";
 import { createModelClient } from "../src/openrouter.js";
 import { createEvaluationContext, judgeSummary } from "../src/evaluator.js";
 import { developmentCorpus } from "../src/corpus.js";
@@ -110,4 +110,61 @@ test("HTML auth errors are terminal and restored HTTP budgets are not reset", as
   const restored = createModelClient(env, { ...options(async () => good()), initialStats: { attempts: 64 } });
   await assert.rejects(restored.run(MODEL_NAME, input), error => error.code === "daily_budget");
   assert.equal(restored.stats.attempts, 64);
+});
+
+test("truncation retries once with more space for thinking, preserving physical usage and rejected evidence", async () => {
+  const limits = [], rejected = [];
+  const client = createModelClient(env, { ...options(async (_url, init) => {
+    limits.push(JSON.parse(init.body).max_tokens);
+    return limits.length === 1 ? Response.json({ model: MODEL_NAME,
+      choices: [{ finish_reason: "length", message: { content: "partial", reasoning_content: "thinking" } }],
+      usage: { prompt_tokens: 100, completion_tokens: 4096, completion_tokens_details: { reasoning_tokens: 4000 }, cost: 0.02 } }) : good();
+  }), onRejectedResponse: async (response, details) => rejected.push({ response, ...details }) });
+  const result = await client.run(MODEL_NAME, { ...input, max_tokens: 4096 });
+  assert.equal(result.choices[0].message.content, "OK");
+  assert.deepEqual(limits, [4096, 8192]);
+  assert.equal(client.stats.attempts, 2);
+  assert.equal(client.stats.retries, 1);
+  assert.equal(client.stats.truncatedResponses, 1);
+  assert.equal(client.stats.inputTokens, 110);
+  assert.equal(client.stats.outputTokens, 4098);
+  assert.equal(client.stats.reasoningTokens, 4000);
+  assert.equal(client.stats.cost, 0.02);
+  assert.equal(rejected[0].response.choices[0].message.content, "partial");
+  assert.equal(rejected[0].code, "output_truncated");
+});
+
+test("repeated truncation is retryable but cannot exceed two HTTP attempts or the output cap", async () => {
+  const limits = [];
+  const client = createModelClient(env, options(async (_url, init) => {
+    limits.push(JSON.parse(init.body).max_tokens);
+    return Response.json({ model: MODEL_NAME, choices: [{ finish_reason: "length", message: { content: "incomplete" } }] });
+  }));
+  await assert.rejects(client.run(MODEL_NAME, { ...input, max_tokens: 10000 }), error => error.code === "output_truncated" && error.retryable);
+  assert.deepEqual(limits, [10000, MAX_MODEL_OUTPUT_TOKENS]);
+  assert.equal(client.stats.attempts, 2);
+  assert.equal(client.stats.truncatedResponses, 2);
+  assert.equal(client.stats.retries, 1);
+});
+
+test("truncation recovery never bypasses the shared HTTP budget and never accepts a different model", async () => {
+  const client = createModelClient(env, { ...options(async () => Response.json({ model: MODEL_NAME,
+    choices: [{ finish_reason: "length", message: { content: "partial" } }] })), maxAttempts: 1 });
+  await assert.rejects(client.run(MODEL_NAME, input), error => error.code === "daily_budget");
+  assert.equal(client.stats.attempts, 1);
+  let calls = 0;
+  await assert.rejects(createModelClient(env, options(async () => {
+    calls++;
+    return Response.json({ model: "another-model", choices: [{ finish_reason: "length", message: { content: "partial" } }] });
+  })).run(MODEL_NAME, input), error => error.code === "model_mismatch" && !error.retryable);
+  assert.equal(calls, 1);
+});
+
+test("empty output has bounded recovery without fabricating response text", async () => {
+  let calls = 0;
+  const client = createModelClient(env, options(async () => ++calls === 1
+    ? Response.json({ model: MODEL_NAME, choices: [{ finish_reason: "stop", message: { content: "" } }] }) : good()));
+  assert.equal((await client.run(MODEL_NAME, input)).choices[0].message.content, "OK");
+  assert.equal(calls, 2);
+  assert.equal(client.stats.retries, 1);
 });

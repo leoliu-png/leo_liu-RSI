@@ -1,7 +1,8 @@
 import { benchmark, initialPrompt, modelName } from "./benchmark.js";
 import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, validationCorpus, validationForDate } from "./corpus.js";
 import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
-import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS } from "./model.js";
+import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS,
+  MODEL_TOKEN_LIMITS, MODEL_CALL_RESERVE_MS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
 import { openJournal, runError, DAILY_CALL_LIMIT } from "./journal.js";
 
@@ -167,14 +168,15 @@ async function generateStrategy(ai, state) {
       { role: "user", content: `当前生成策略：\n${state.strategy.instruction}\n\n最近开发集失败证据：\n${historicalFeedback(state)}\n\n提出一条不同且可检验的生成候选策略，重点解决多轮反复出现的问题。只返回 {"hypothesis":"为什么这条策略会更好","instruction":"给候选提示词生成器的具体操作指令"}。不要请求或猜测未公开验证文章。` }
     ];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await ai.run(modelName, { messages, max_tokens: 1000, temperature: 0.65 });
+    const response = await ai.run(modelName, { messages, max_tokens: MODEL_TOKEN_LIMITS.strategy, temperature: 0.65 });
     const raw = extractText(response);
     try {
       const challenger = parseStrategy(raw);
       if (challenger.instruction === state.strategy.instruction) throw new Error("Strategy proposal did not change");
       return challenger;
     } catch (error) {
-      if (attempt) throw runError(`Strategy JSON repair exhausted: ${error.message}`, "strategy_structure");
+      await ai.reject?.(error);
+      if (attempt) throw runError(`Strategy JSON repair exhausted: ${error.message}`, "strategy_structure", true);
       messages.push({ role: "assistant", content: raw }, { role: "user", content:
         `格式校验失败：${error.message}。只修复并返回完整 JSON：hypothesis 非空，instruction 为60—700字符，不得改变摘要任务或评分规则。` });
     }
@@ -190,7 +192,7 @@ async function generateCandidate(ai, champion, strategy, feedback, id, excludedP
       { role: "system", content: `你负责改进技术文章的四段式中文摘要提示词。只返回有效 JSON。必须保留四段标题、忠于原文和禁止编造要求。\n候选生成策略：${strategy.instruction}` },
       { role: "user", content: `当前冠军提示词：\n${champion}\n\n最近开发集失败证据：\n${feedback}${exclusions}\n\n今天两种策略使用相同修改方向：${focus}。请按自己的生成策略解决开发集具体失败；不要堆叠泛泛的核对要求。必须增加、删除或替换一条可执行的摘要行为规则；只换同义词、标点或措辞不算修改。只提出一个完整候选，并清楚写出行为变化。格式：{"hypothesis":"可检验的行为变化","prompt":"完整提示词"}。不得加入任何未公开验证文章的信息。` }
     ],
-    max_tokens: 1200,
+    max_tokens: MODEL_TOKEN_LIMITS.candidate,
     temperature: 0.7
   });
   return parseCandidate(extractText(response), id, strategy.version || `trial-${strategy.id.slice(0, 8)}`);
@@ -255,7 +257,7 @@ async function runPrompt(context, prompt, samples, label) {
         { role: "system", content: prompt },
         { role: "user", content: `请根据下文完成任务。只输出摘要。\n\n${sample.article}` }
       ],
-      max_tokens: 800,
+      max_tokens: MODEL_TOKEN_LIMITS.summary,
       temperature: 0,
       seed: 42
     }));
@@ -421,12 +423,17 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
   cp.attempts.push(execution);
   const client = modelClient || createModelClient(env, {
     initialStats: cp.usage?.transport, maxAttempts: DAILY_CALL_LIMIT,
-    onAttempt: async stats => { cp.usage.transport = stats; await journal.save(); }
+    onAttempt: async stats => { cp.usage.transport = stats; await journal.save(); },
+    onRejectedResponse: async (response, details) => {
+      cp.rejectedModelResponses ||= [];
+      cp.rejectedModelResponses.push({ stage: cp.stage, rejectedAt: new Date().toISOString(), ...details, response });
+      await journal.save();
+    }
   });
   const context = createEvaluationContext(client, DEFAULT_JUDGE_MODEL, DAILY_CALL_LIMIT, {
     initialUsage: cp.usage,
     beforeCall() {
-      if (Date.now() - executionStarted > (options.executionWindowMs ?? 600000) - 200000) {
+      if (Date.now() - executionStarted > (options.executionWindowMs ?? 600000) - MODEL_CALL_RESERVE_MS) {
         throw runError("Execution slice finished; continue from checkpoint", "execution_slice", true);
       }
     },
@@ -438,6 +445,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
   const progress = () => ({ stage: cp.stage, completedTasks: Object.values(cp.tasks).filter(item => item.status === "completed").length,
     calls: context.usage.calls, callLimit: DAILY_CALL_LIMIT, resumable: true });
   const rawEvidence = () => [
+    ...(cp.rejectedModelResponses || []),
     ...(cp.rejectedResponses || []),
     ...Object.entries(cp.tasks).filter(([key, item]) => key.includes(":response:") && item.status === "completed")
       .map(([step, item]) => ({ step, response: item.value }))
@@ -448,6 +456,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
     evaluator: { model: context.model, version: EVALUATOR_VERSION, rubric: RUBRIC },
     datasetVersion: DATASET_VERSION, usage: context.usage, progress: progress(), attempts: cp.attempts,
     rejectedJudgeResponses: cp.rejectedResponses || [],
+    rejectedModelResponses: cp.rejectedModelResponses || [],
     developmentSamples, validationSamples, candidates: []
   });
   const persist = async next => {
@@ -513,7 +522,12 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
         { date, baseline: baselineFeedback(), instruction: "基于具体错误或遗漏改进；分项已满分时不要重复添加相同要求" }] };
       await mark("strategy-proposal");
       const challenger = await journal.task("challenger", () => state.challenger ||
-        generateStrategy(journal.ai("strategy", context.ai), proposalState));
+        generateStrategy(journal.ai("strategy", context.ai, {
+          validateCached: response => {
+            const proposal = parseStrategy(extractText(response));
+            if (proposal.instruction === state.strategy.instruction) throw new Error("Strategy proposal did not change");
+          }, rejectionCode: "strategy_structure"
+        }), proposalState));
       const workingState = { ...state, challenger };
       const feedback = historicalFeedback(proposalState);
       const focus = ["事实、数字、否定及适用条件", "信息完整性和术语/风险边界", "跨段重复与表达清晰度"]
@@ -611,6 +625,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
     cp.core.latestRun.attempts = cp.attempts;
     cp.core.latestRun.progress = progress();
     cp.core.latestRun.rejectedJudgeResponses = cp.rejectedResponses || [];
+    cp.core.latestRun.rejectedModelResponses = cp.rejectedModelResponses || [];
     await journal.save();
     await persist(cp.core);
     return { skipped: false, state: published };
