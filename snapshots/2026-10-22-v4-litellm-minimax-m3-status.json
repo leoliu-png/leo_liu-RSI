@@ -8940,8 +8940,24 @@
   },
   "archive": {
     "date": "2026-10-22",
+    "checkedAt": "2026-10-22T08:53:25.237Z",
     "kind": "operational-status-not-successful-experiment",
-    "checkedAt": "2026-10-22T06:49:33.008Z",
-    "finalFailure": true
+    "experimentStatus": "failed",
+    "freshMeasurement": false,
+    "finalFailure": true,
+    "code": "output_truncated",
+    "stage": "evaluate-C2-development",
+    "fingerprint": "[\"2026-10-22\",\"litellm-minimax-m3\",\"390effcf-1afe-43cf-b90e-746f5f825c52\",\"evaluate-C2-development\",\"output_truncated\"]",
+    "notify": false,
+    "duplicateAlert": true,
+    "error": "LiteLLM output was truncated after bounded recovery; refusing incomplete evidence",
+    "notifiedFailures": [
+      {
+        "fingerprint": "[\"2026-10-22\",\"litellm-minimax-m3\",\"390effcf-1afe-43cf-b90e-746f5f825c52\",\"evaluate-C2-development\",\"output_truncated\"]",
+        "firstReportedAt": "2026-10-22T06:49:33.008Z",
+        "workflowUrl": null,
+        "migratedLegacyAlert": true
+      }
+    ]
   }
 }
