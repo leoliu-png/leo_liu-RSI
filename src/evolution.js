@@ -4,6 +4,7 @@ import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALU
 import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS,
   MODEL_TOKEN_LIMITS, MODEL_CALL_RESERVE_MS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
+import { visibleModelText } from "./model-stream.js";
 import { openJournal, runError, DAILY_CALL_LIMIT, DAILY_HTTP_LIMIT } from "./journal.js";
 
 export const STATE_KEY = `rsi:v4:${MODEL_PROFILE}:state`;
@@ -66,10 +67,10 @@ export function initialState() {
 }
 
 export function extractText(response) {
-  if (typeof response === "string") return response.trim();
-  if (typeof response?.response === "string") return response.response.trim();
-  if (typeof response?.response?.content === "string") return response.response.content.trim();
-  if (typeof response?.choices?.[0]?.message?.content === "string") return response.choices[0].message.content.trim();
+  if (typeof response === "string") return visibleModelText(response).trim();
+  if (typeof response?.response === "string") return visibleModelText(response.response).trim();
+  if (typeof response?.response?.content === "string") return visibleModelText(response.response.content).trim();
+  if (typeof response?.choices?.[0]?.message?.content === "string") return visibleModelText(response.choices[0].message.content).trim();
   throw new Error("Model returned no text");
 }
 

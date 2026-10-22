@@ -42,7 +42,14 @@ export async function openJournal(kv, date, state) {
   };
   const journal = { checkpoint, save, async task(name, work) {
     const cached = checkpoint.tasks[name];
-    if (cached?.status === "completed") return structuredClone(cached.value);
+    if (cached?.status === "completed") {
+      const contaminated = name.startsWith("output:") ? /^\s*<think>/u.test(cached.value?.summary || "")
+        : name.startsWith("measure:") && cached.value?.outputs?.some(output => /^\s*<think>/u.test(output.summary || ""));
+      if (!contaminated) return structuredClone(cached.value);
+      checkpoint.rejectedTaskResults ||= [];
+      checkpoint.rejectedTaskResults.push({ step: name, value: structuredClone(cached.value),
+        error: "Transport reasoning was included in the summary; recompute judgment from visible text", rejectedAt: new Date().toISOString() });
+    }
     checkpoint.tasks[name] = { ...cached, status: "running", startedAt: new Date().toISOString() };
     await save();
     try {

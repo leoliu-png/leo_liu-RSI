@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelClient } from "../src/openrouter.js";
-import { readModelStream } from "../src/model-stream.js";
+import { readModelStream, visibleModelText } from "../src/model-stream.js";
+import { extractText } from "../src/evolution.js";
 import { MODEL_NAME } from "../src/model.js";
 
 const env = { MODEL_API_KEY: "test-stream-secret" };
@@ -22,6 +23,13 @@ const completed = () => stream([
   { choices: [], usage: { prompt_tokens: 10, completion_tokens: 12, completion_tokens_details: { reasoning_tokens: 6 }, cost: 0.01 } }, "[DONE]"
 ], true);
 const options = fetch => ({ fetch, sleep: async () => {}, intervalMs: 0 });
+
+test("native thinking wrappers are separated from visible summaries without modifying ordinary text", () => {
+  assert.equal(visibleModelText('<think>internal reasoning</think>\n\n结论：可核查摘要。'), "结论：可核查摘要。");
+  assert.equal(extractText({ choices: [{ message: { content: '<think>internal reasoning</think>\n要点：正文。' } }] }), "要点：正文。");
+  assert.equal(visibleModelText('结论：原文讨论 <think> 标签。'), '结论：原文讨论 <think> 标签。');
+  assert.throws(() => visibleModelText('<think>unfinished'), error => error.code === "incomplete_stream");
+});
 
 test("SSE assembly handles fragmented UTF-8, CRLF, separated thinking, finish and usage-only frames", async () => {
   const result = await readModelStream(completed());

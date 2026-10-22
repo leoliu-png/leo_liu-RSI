@@ -1,3 +1,12 @@
+// MiniMax gateways may duplicate reasoning_content as a leading <think> block.
+export function visibleModelText(content) {
+  if (typeof content !== "string") return content;
+  const thinking = /^\s*<think>[\s\S]*?<\/think>\s*/u.exec(content);
+  if (thinking) return content.slice(thinking[0].length);
+  if (/^\s*<think>/u.test(content)) throw Object.assign(new Error("Unclosed model thinking block"), { code: "incomplete_stream", retryable: true });
+  return content;
+}
+
 // Assemble SSE without treating cut-off streams or reasoning as completed answers.
 export async function readModelStream(response, { touch = () => {}, onUsage = async () => {} } = {}) {
   if (!response.body) throw Object.assign(new Error("Model stream has no body"), { code: "invalid_stream", retryable: true });

@@ -1,5 +1,6 @@
 import { calibrationCases, DATASET_VERSION } from "./corpus.js";
 import { MODEL_NAME, MODEL_TOKEN_LIMITS } from "./model.js";
+import { visibleModelText } from "./model-stream.js";
 
 export const SCORER_VERSION = 4;
 export const EVALUATOR_VERSION = "semantic-v4.2-minimax-m3";
@@ -137,7 +138,7 @@ function responseJson(response) {
   if (response?.response && typeof response.response === "object") return response.response;
   const raw = typeof response === "string" ? response : response?.response || response?.choices?.[0]?.message?.content;
   if (typeof raw !== "string") throw new Error("Judge returned no structured judgment");
-  return JSON.parse(raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, ""));
+  return JSON.parse(visibleModelText(raw).replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, ""));
 }
 
 export function materializeQuotes(value, summary) {
