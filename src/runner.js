@@ -9,6 +9,8 @@ export const MAX_EXECUTIONS = 16;
 export const MAX_MANUAL_RECOVERIES = 3;
 const JOB_KEY = "daily-job";
 const terminal = new Set(["completed", "completed_with_audit_warning", "blocked", "exhausted", "missed"]);
+const completedWork = checkpoint => Object.entries(checkpoint?.tasks || {})
+  .filter(([key, task]) => !key.includes(":response:") && task.status === "completed").length;
 
 // SQLite is authoritative. KV is a backwards-compatible mirror, not a distributed lock.
 export function durableRecords(storage, backup) {
@@ -144,6 +146,7 @@ export class EvolutionRunner {
       job.code = null;
       // Persist a recovery alarm before inference, so process termination does not lose the job.
       await this.saveJob(job, this.now() + 12 * 60000);
+      const beforeProgress = completedWork(await this.records.get(`${CHECKPOINT_PREFIX}${job.date}`, "json"));
       let problem;
       try {
         const result = await this.execute(this.runEnv, job.timestamp);
@@ -168,6 +171,10 @@ export class EvolutionRunner {
       job.error = redactError(problem.message, this.env.MODEL_API_KEY);
       job.code = problem.code || "execution_error";
       const paused = problem.code === "execution_slice";
+      job.lastProgress = completedWork(await this.records.get(`${CHECKPOINT_PREFIX}${job.date}`, "json"));
+      // Successful checkpoint work between faults breaks a consecutive failure
+      // streak; total failures and every billing/execution limit stay intact.
+      if (job.lastProgress > beforeProgress) job.retryFailures = 0;
       if (!paused) {
         job.retryFailures = (job.retryFailures ?? job.failures) + 1;
         job.failures++;

@@ -272,13 +272,14 @@
     function render(state) {
       const run=state.latestRun, champion=state.champion, job=state.automation;
       renderEvaluation(state);
-      const limited=run?.status === "completed" && ["partial_candidates","generation_exhausted"].includes(run.outcome);
+      const resourceLimited=run?.status === "completed" && run.outcome === "candidate_execution_limited";
+      const limited=run?.status === "completed" && ["partial_candidates","generation_exhausted","candidate_execution_limited"].includes(run.outcome);
       const assisted=run?.status === "completed" && run.outcome === "fallback_candidates";
-      $("#online-status").textContent = limited ? "LIMITED / 候选去重受限" : assisted ? "GUARDED / 规则补位完成" : run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
+      $("#online-status").textContent = resourceLimited ? "LIMITED / 候选资源淘汰" : limited ? "LIMITED / 候选去重受限" : assisted ? "GUARDED / 规则补位完成" : run?.status === "completed" ? "LIVE / 实验已完成" : run?.status === "failed" ? "ERROR / 实验失败" : "READY / 等待首轮";
       if (["queued","running","paused","waiting_retry"].includes(job?.status)) $("#online-status").textContent=`RUNNING / ${job.status==="waiting_retry"?"等待自动续跑":"每日任务进行中"}`;
       $("#version").textContent = champion.version;
       $("#score").textContent = number(champion.score);
-      $("#decision").textContent = run?.status === "completed" ? (run.accepted ? "已晋级" : limited ? "去重回退" : assisted ? "规则补位" : "保留冠军") : run?.status === "failed" ? "运行失败" : "待运行";
+      $("#decision").textContent = run?.status === "completed" ? (run.accepted ? "已晋级" : resourceLimited ? "资源淘汰" : limited ? "去重回退" : assisted ? "规则补位" : "保留冠军") : run?.status === "failed" ? "运行失败" : "待运行";
       if (run?.status==="running" || run?.status==="paused") $("#decision").textContent=run.status==="paused"?"断点续跑":"运行中";
       $("#date").textContent = run?.date || "每天 09:00 CST";
       $("#champion-title").textContent = `冠军提示词 · ${champion.version}`;
@@ -313,7 +314,8 @@
         if(item.metrics.outputs?.length){const evidence=make("details");evidence.append(make("summary","查看开发集逐篇摘要"));item.metrics.outputs.forEach(output=>{evidence.append(make("h4",`${output.title} · ${output.score} 分`),make("pre",output.summary),make("p",`遗漏：${output.missing.join("、")||"无"}；禁用断言：${output.forbidden.join("、")||"无"}`,"note"));});card.append(evidence);}
         item.metrics.outputs?.forEach(output=>card.append(semanticEvidence(output)));
       });
-      else candidates.append(make("p",run?.outcome === "generation_exhausted" ? "两条候选均与冠军、历史候选或彼此重复，重试后仍无不同 Prompt；今天没有候选晋级。" : "首次实验完成后展示真实候选 Prompt 和分数。","note"));
+      else candidates.append(make("p",resourceLimited ? "候选未能在资源上限内生成完整摘要；没有有效评分，不晋级。" : run?.outcome === "generation_exhausted" ? "两条候选均与冠军、历史候选或彼此重复，重试后仍无不同 Prompt；今天没有候选晋级。" : "首次实验完成后展示真实候选 Prompt 和分数。","note"));
+      (run?.candidateExecutionFailures || []).forEach(item=>{const card=make("article",null,"candidate");card.append(make("h4",`${item.id} · 执行资源淘汰（无总分）`),make("p",item.reason),make("p",`失败步骤 ${item.label} · 样本 ${item.sampleId} · ${item.maxTokens} tokens 上限`,"note"));const details=make("details");details.append(make("summary","查看被淘汰的候选 Prompt"),make("pre",item.prompt));card.append(details);candidates.append(card);});
       const rejected=run?.candidateGeneration?.results?.flatMap(item=>item.rejected.map(entry=>({...entry,id:item.id}))) || [];
       if(rejected.length){const evidence=make("details");evidence.append(make("summary",`查看 ${rejected.length} 次重复或微小改动拦截记录`));rejected.forEach(item=>evidence.append(make("p",`${item.id} · 第 ${item.attempt} 次：${item.reason}`,"note"),make("pre",item.prompt)));candidates.append(evidence);}
       drawChart(state.history || [], state.modelProfile);

@@ -2,7 +2,7 @@ import { benchmark, initialPrompt, modelName } from "./benchmark.js";
 import { auditCorpus, DATASET_VERSION, developmentCorpus, developmentForDate, validationCorpus, validationForDate } from "./corpus.js";
 import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALUATOR_VERSION, judgeSummary, RUBRIC, SCORER_VERSION } from "./evaluator.js";
 import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS,
-  MODEL_TOKEN_LIMITS, MODEL_CALL_RESERVE_MS } from "./model.js";
+  MODEL_TOKEN_LIMITS, MODEL_CALL_RESERVE_MS, MAX_MODEL_OUTPUT_TOKENS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
 import { visibleModelText } from "./model-stream.js";
 import { openJournal, runError, DAILY_CALL_LIMIT, DAILY_HTTP_LIMIT } from "./journal.js";
@@ -253,7 +253,8 @@ async function runPrompt(context, prompt, samples, label) {
   const outputs = [];
   for (const sample of samples) {
     const work = async () => {
-    const response = await context.journal.task(`summary:${label}:${sample.id}`, () => context.ai.run(modelName, {
+    let response;
+    try { response = await context.journal.task(`summary:${label}:${sample.id}`, () => context.ai.run(modelName, {
       messages: [
         { role: "system", content: prompt },
         { role: "user", content: `请根据下文完成任务。只输出摘要。\n\n${sample.article}` }
@@ -261,7 +262,18 @@ async function runPrompt(context, prompt, samples, label) {
       max_tokens: MODEL_TOKEN_LIMITS.summary,
       temperature: 0,
       seed: 42
-    }));
+    })); } catch (error) {
+      // Only a candidate's own summary hitting the physical output ceiling is
+      // an execution rejection. Judge, baseline, network and budget faults
+      // remain experiment failures; no incomplete answer is ever scored.
+      if (/^C[12]:(dev|validation)$/u.test(label) && error.code === "output_truncated" &&
+          error.resourceLimitReached === true && error.maxTokens === MAX_MODEL_OUTPUT_TOKENS &&
+          error.rejectedResponse?.choices?.[0]?.finish_reason === "length") {
+        error.candidateResourceFailure = { label, sampleId: sample.id, maxTokens: error.maxTokens,
+          requestKey: error.requestKey || null };
+      }
+      throw error;
+    }
     const summary = extractText(response);
     return { sampleId: sample.id, title: sample.title, summary, sources: sample.sources,
       ...await judgeSummary(context, sample, summary) };
@@ -462,6 +474,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
     datasetVersion: DATASET_VERSION, usage: context.usage, progress: progress(), attempts: cp.attempts,
     rejectedJudgeResponses: cp.rejectedResponses || [],
     rejectedModelResponses: cp.rejectedModelResponses || [],
+    candidateExecutionFailures: cp.candidateExecutionFailures || [],
     developmentSamples, validationSamples, candidates: []
   });
   const persist = async next => {
@@ -554,12 +567,30 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
       })) };
       const evaluated = [];
       for (const item of [first.candidate, second.candidate].filter(Boolean)) {
-        await mark(`evaluate-${item.id}-development`);
-        const metrics = await measure(`${item.id}:dev`, item.prompt, developmentSamples);
-        await mark(`evaluate-${item.id}-validation`);
-        const holdout = await measure(`${item.id}:validation`, item.prompt, validationSamples);
-        evaluated.push({ ...item, focus, metrics, holdout, ...promotionDecision({ metrics, holdout }, baseline, holdoutBaseline) });
+        const savedRejection = cp.candidateExecutionFailures?.find(failure => failure.id === item.id);
+        if (!savedRejection) {
+          try {
+            await mark(`evaluate-${item.id}-development`);
+            const metrics = await measure(`${item.id}:dev`, item.prompt, developmentSamples);
+            await mark(`evaluate-${item.id}-validation`);
+            const holdout = await measure(`${item.id}:validation`, item.prompt, validationSamples);
+            evaluated.push({ ...item, focus, metrics, holdout, ...promotionDecision({ metrics, holdout }, baseline, holdoutBaseline) });
+          } catch (error) {
+            if (!error.candidateResourceFailure) throw error;
+            cp.candidateExecutionFailures ||= [];
+            cp.candidateExecutionFailures.push({ ...item, eligible: false, metrics: null, holdout: null,
+              code: error.code, ...error.candidateResourceFailure, rejectedAt: new Date().toISOString(),
+              rejectedResponse: error.rejectedResponse,
+              reason: `候选摘要在 ${MAX_MODEL_OUTPUT_TOKENS} tokens 上限仍被截断；按执行资源约束淘汰，不评分、不晋级、不计策略胜负`,
+              partialOutputs: Object.entries(cp.tasks).filter(([key, task]) =>
+                key.startsWith(`output:${item.id}:`) && task.status === "completed").map(([step, task]) => ({ step, ...task.value })) });
+            await journal.save();
+          }
+        }
+        candidateGeneration.results.find(result => result.id === item.id).executionStatus =
+          cp.candidateExecutionFailures?.some(failure => failure.id === item.id) ? "resource_rejected" : "completed";
       }
+      const resourceLimited = Boolean(cp.candidateExecutionFailures?.length);
       const winner = evaluated.filter(item => item.eligible)
         .sort((a, b) => b.metrics.score - a.metrics.score || b.holdout.score - a.holdout.score)[0];
       const generation = state.generation + (winner ? 1 : 0);
@@ -569,10 +600,11 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
       const paired = evaluated.length === 2 && evaluated.every(item => item.source === "model");
       const strategyResult = paired ? updateStrategyTrial(workingState, date, evaluated[0], evaluated[1]) : {
         trial: null, strategy: state.strategy, challenger: null, strategyGeneration: state.strategyGeneration,
-        decision: evaluated.length === 2 ? "模型候选不足，使用预定义核验规则补位；不把补位成绩计入挑战策略胜负"
+        decision: resourceLimited ? "候选触达执行资源上限被淘汰；配对不完整，不计策略胜负"
+          : evaluated.length === 2 ? "模型候选不足，使用预定义核验规则补位；不把补位成绩计入挑战策略胜负"
           : "候选去重及核验规则补位后仍不足两条；不计策略胜负，回退未完成配对的挑战策略"
       };
-      const outcome = paired ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
+      const outcome = resourceLimited ? "candidate_execution_limited" : paired ? "evaluated" : evaluated.length === 2 ? "fallback_candidates"
         : evaluated.length === 1 ? "partial_candidates" : "generation_exhausted";
       const audit = state.lastAudit?.championVersion === champion.version &&
         state.lastAudit.evaluatorVersion === EVALUATOR_VERSION ? state.lastAudit : {
@@ -589,6 +621,7 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
         accepted: Boolean(winner), selectedId: winner?.id ?? null, championVersion: champion.version, championScore: champion.score,
         strategyTrial: strategyResult.trial, strategyDecision: strategyResult.decision,
         reason: winner ? `${winner.id} 在开发集和新文章上均通过晋级门槛${paired ? "" : "；策略配对未完成或未计分"}`
+          : resourceLimited ? "部分候选触达执行资源上限被淘汰；其余候选未达晋级门槛，保留冠军并公开完整失败证据"
           : outcome === "generation_exhausted" ? "未得到有效新 Prompt；仅完成冠军基线测评，冠军保持不变"
           : outcome === "partial_candidates" ? "候选不足两条；仅通过全部晋级门槛的候选可替换冠军，不计策略胜负"
           : outcome === "fallback_candidates" ? "规则补位候选未通过晋级门槛；冠军保持不变"

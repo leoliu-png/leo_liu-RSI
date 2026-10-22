@@ -6,6 +6,7 @@ import { developmentCorpus, validationCorpus, auditCorpus, calibrationCases, val
 import { judgmentFor } from "../test-support/judgment.js";
 import { hasSnapshotEvidence } from "../scripts/snapshot-evidence.mjs";
 import { CHECKPOINT_PREFIX } from "../src/journal.js";
+import { MAX_MODEL_OUTPUT_TOKENS } from "../src/model.js";
 import {
   STATE_KEY, RUN_PREFIX, challengerBeatsIncumbent, experimentDate, getState, initialState, publicState,
   promotionDecision, rescoreMetrics, runEvolution as runRealEvolution, scoreSummary, updateStrategyTrial
@@ -481,6 +482,94 @@ test("execution slicing checkpoints work and does not spend new calls before res
   assert.equal((await getState(mock.env)).latestRun.status, "paused");
   const result = await runEvolution(mock.env, time);
   assert.equal(result.state.latestRun.status, "completed");
+});
+
+test("candidate summary resource rejection preserves evidence without fabricated scores or strategy wins", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  let rejectedCalls = 0, auditFailed = false;
+  mock.env.AI.run = async (model, input) => {
+    if (input.temperature === 0 && input.messages[0].content === promptB &&
+        validationCorpus.some(sample => input.messages[1].content.includes(sample.article))) {
+      rejectedCalls++;
+      throw Object.assign(new Error("truncated at ceiling"), { code: "output_truncated", retryable: true,
+        resourceLimitReached: true, maxTokens: MAX_MODEL_OUTPUT_TOKENS, requestKey: "test-only-key",
+        rejectedResponse: { choices: [{ finish_reason: "length", message: { content: "incomplete, must not be scored" } }] } });
+    }
+    if (!auditFailed && input.temperature === 0 &&
+        auditCorpus.some(sample => input.messages[1].content.includes(sample.article))) {
+      auditFailed = true; throw outage();
+    }
+    return original(model, input);
+  };
+  const time = Date.parse("2026-09-24T01:00:00Z"), first = await runEvolution(mock.env, time);
+  const run = first.state.latestRun;
+  assert.equal(run.status, "completed");
+  assert.equal(run.outcome, "candidate_execution_limited");
+  assert.deepEqual(run.candidates.map(item => item.id), ["C1"]);
+  assert.equal(run.strategyTrial, null);
+  assert.equal(first.state.strategyHistory.length, 0);
+  assert.equal(run.selectedId, "C1", "a fully evaluated candidate still needs the unchanged promotion gates");
+  const failure = run.candidateExecutionFailures[0];
+  assert.equal(failure.prompt, promptB);
+  assert.equal(failure.eligible, false);
+  assert.equal(failure.metrics, null);
+  assert.equal(failure.holdout, null);
+  assert.equal(failure.label, "C2:validation");
+  assert.equal(failure.partialOutputs.length, 3, "previous valid development evidence is retained separately");
+  assert.equal(hasSnapshotEvidence(first.state), true);
+  const fabricated = structuredClone(first.state);
+  fabricated.latestRun.selectedId = "C2";
+  assert.equal(hasSnapshotEvidence(fabricated), false, "execution-rejected candidates cannot be promoted");
+  const feedback = JSON.stringify(first.state.feedbackHistory);
+  assert.ok([...validationCorpus, ...auditCorpus].every(sample => !feedback.includes(sample.article)));
+  const second = await runEvolution(mock.env, time);
+  assert.equal(second.state.latestRun.audit.status, "completed");
+  assert.equal(rejectedCalls, 1, "audit recovery never re-evaluates the rejected candidate");
+  assert.equal(hasSnapshotEvidence(second.state), true);
+});
+
+test("two resource-rejected candidates finish as an explicitly limited experiment and retain the champion", async () => {
+  const mock = fakeEnvironment(), original = mock.env.AI.run;
+  mock.env.AI.run = async (model, input) => {
+    if (input.temperature === 0 && [promptA, promptB].includes(input.messages[0].content)) {
+      throw Object.assign(new Error("truncated"), { code: "output_truncated", retryable: true,
+        resourceLimitReached: true, maxTokens: MAX_MODEL_OUTPUT_TOKENS,
+        rejectedResponse: { choices: [{ finish_reason: "length", message: { content: "incomplete, must not be scored" } }] } });
+    }
+    return original(model, input);
+  };
+  const { state } = await runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z"));
+  assert.equal(state.latestRun.outcome, "candidate_execution_limited");
+  assert.equal(state.latestRun.candidates.length, 0);
+  assert.equal(state.latestRun.candidateExecutionFailures.length, 2);
+  assert.equal(state.latestRun.accepted, false);
+  assert.equal(state.champion.version, "v0");
+  assert.equal(state.latestRun.audit.status, "completed");
+  assert.equal(hasSnapshotEvidence(state), true);
+});
+
+test("network, budget, judge and baseline faults are never disguised as candidate resource rejections", async () => {
+  for (const target of ["network", "budget", "below-ceiling", "judge", "baseline"]) {
+    const mock = fakeEnvironment(), original = mock.env.AI.run;
+    mock.env.AI.run = async (model, input) => {
+      const isJudge = input.messages[0].content.startsWith("rsi-evaluator-v4");
+      const candidateSummary = input.temperature === 0 && input.messages[0].content === promptA;
+      const candidateJudge = isJudge && JSON.parse(input.messages[1].content).summary.startsWith("结论：概述");
+      const baselineSummary = input.temperature === 0 && !isJudge && ![promptA, promptB].includes(input.messages[0].content);
+      if ((target === "judge" && candidateJudge) || (target === "baseline" && baselineSummary) ||
+          (!["judge", "baseline"].includes(target) && candidateSummary)) {
+        throw Object.assign(new Error(`test ${target}`), { code: target === "network" ? "http_524" : target === "budget" ? "daily_budget" : "output_truncated",
+          retryable: true, resourceLimitReached: target !== "below-ceiling", maxTokens: target === "below-ceiling" ? 8192 : MAX_MODEL_OUTPUT_TOKENS,
+          rejectedResponse: { choices: [{ finish_reason: "length", message: { content: "incomplete, must not be scored" } }] } });
+      }
+      return original(model, input);
+    };
+    await assert.rejects(runEvolution(mock.env, Date.parse("2026-09-24T01:00:00Z")), new RegExp(`test ${target}`));
+    const state = await getState(mock.env);
+    assert.equal(state.latestRun.status, "failed");
+    assert.deepEqual(state.latestRun.candidateExecutionFailures, []);
+    assert.equal(state.champion.version, "v0");
+  }
 });
 
 test("daily inference budget survives failures and cannot be reset by a retry", async () => {

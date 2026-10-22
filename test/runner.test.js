@@ -246,3 +246,24 @@ test("live status reads authoritative checkpoint progress without advertising an
   assert.equal(result.latestRun.progress.stage, "baseline-development");
   assert.equal(result.latestRun.usage.transport.attempts, 15);
 });
+
+test("real checkpoint progress resets the stagnant-failure streak but not total failures or execution counts", async () => {
+  let calls = 0;
+  const mock = harness(async () => {
+    calls++;
+    mock.records.set(`${CHECKPOINT_PREFIX}2026-10-10`, JSON.stringify({ tasks: Object.fromEntries(
+      Array.from({ length: calls }, (_, index) => [`output:sample:${index}`, { status: "completed" }])) }));
+    throw Object.assign(new Error("next step temporarily unavailable"), { code: "http_524", retryable: true });
+  });
+  await mock.runner.schedule();
+  for (let index = 0; index < MAX_FAILURES + 1; index++) {
+    await mock.runner.alarm();
+    const job = await mock.storage.get("daily-job");
+    assert.equal(job.status, "waiting_retry");
+    assert.equal(job.retryFailures, 1);
+    assert.equal(job.failures, index + 1);
+    assert.equal(job.executions, index + 1);
+    assert.equal(job.lastProgress, index + 1);
+    mock.advance(mock.alarm());
+  }
+});

@@ -1,5 +1,5 @@
 import { MODEL_NAME, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, MAX_MODEL_OUTPUT_TOKENS, MODEL_REQUEST_TIMEOUT_MS, MODEL_STREAM_IDLE_MS } from "./model.js";
-import { readModelStream } from "./model-stream.js";
+import { readModelStream, visibleModelText } from "./model-stream.js";
 const providerFailure = (message, extra = {}) => Object.assign(new Error(message), { providerFailure: true, retryable: false, ...extra });
 
 export function redactError(value, key) {
@@ -83,6 +83,12 @@ export function createModelClient(env, options = {}) {
               await options.onAttempt?.(stats);
             } });
           } else data = await response.json();
+          const message = data.choices?.[0]?.message;
+          if (data.choices?.[0]?.finish_reason !== "length" && typeof message?.content === "string") {
+            const thinking = /^\s*<think>([\s\S]*?)<\/think>/u.exec(message.content);
+            if (thinking && !message.reasoning_content) message.reasoning_content = thinking[1];
+            message.content = visibleModelText(message.content);
+          }
         }
         catch (error) {
           if (error.streamError) data = { error: error.streamError };
@@ -148,7 +154,8 @@ export function createModelClient(env, options = {}) {
           continue;
         }
         throw providerFailure("LiteLLM output was truncated after bounded recovery; refusing incomplete evidence", {
-          code: "output_truncated", retryable: true
+          code: "output_truncated", retryable: true, maxTokens: outputLimit,
+          resourceLimitReached: outputLimit >= MAX_MODEL_OUTPUT_TOKENS, requestKey: key, rejectedResponse: data
         });
       }
       if (typeof choice?.message?.content !== "string" || !choice.message.content.trim()) {

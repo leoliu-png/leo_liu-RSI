@@ -71,3 +71,17 @@ test("dashboard distinguishes pending audit and scheduled recovery from successf
   state.latestRun = { status: "paused", progress: { completedTasks: 7, stage: "baseline-validation" } };
   assert.match(render(state).get("#notice").textContent, /已保存步骤 7/);
 });
+
+test("resource-rejected candidates are shown explicitly without scores or a fake full pairing", () => {
+  const state = publicState(initialState());
+  state.latestRun = { status: "completed", outcome: "candidate_execution_limited", candidates: [],
+    candidateExecutionFailures: [{ id: "C2", prompt: "test prompt", reason: "资源上限内未完成",
+      label: "C2:validation", sampleId: "test", maxTokens: 16384 }], accepted: false };
+  const elements = render(state);
+  assert.equal(elements.get("#online-status").textContent, "LIMITED / 候选资源淘汰");
+  assert.equal(elements.get("#decision").textContent, "资源淘汰");
+  const contents = JSON.stringify(elements.get("#candidates"));
+  assert.match(contents, /无总分/);
+  assert.match(contents, /C2:validation/);
+  assert.doesNotMatch(contents, /16384 分/);
+});

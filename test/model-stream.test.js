@@ -56,6 +56,21 @@ test("stream requests and usage are accounted once without provider-specific thi
   assert.equal(client.stats.reportedCostCalls, 1);
 });
 
+test("wrapped native thinking is retained separately and never used as visible output", async () => {
+  const client = createModelClient(env, options(async () => stream([
+    { model: MODEL_NAME, choices: [{ delta: { content: '<think>private reasoning</think>\n摘要正文' }, finish_reason: "stop" }] }, "[DONE]"
+  ])));
+  const response = await client.run(MODEL_NAME, input);
+  assert.equal(response.choices[0].message.content, "摘要正文");
+  assert.equal(response.choices[0].message.reasoning_content, "private reasoning");
+  let requests = 0;
+  const onlyThinking = createModelClient(env, options(async () => {
+    requests++; return stream([{ model: MODEL_NAME, choices: [{ delta: { content: '<think>no answer</think>' }, finish_reason: "stop" }] }, "[DONE]"]);
+  }));
+  await assert.rejects(onlyThinking.run(MODEL_NAME, input), error => error.code === "empty_output");
+  assert.equal(requests, 2);
+});
+
 test("a stream with partial text but no finish marker is never accepted as a complete response", async () => {
   const client = createModelClient(env, options(async () => stream([
     { model: MODEL_NAME, choices: [{ delta: { content: '{"validLooking":"but incomplete"}' } }] }, "[DONE]"
@@ -97,4 +112,13 @@ test("saved expansion survives an execution-slice pause without spending another
   await assert.rejects(client.run(MODEL_NAME, input), error => error.code === "execution_slice");
   assert.equal(client.stats.attempts, 1);
   assert.equal(Object.values(policies)[0].maxTokens, 8192);
+});
+
+test("truncation at the output ceiling is explicitly identified without accepting partial text", async () => {
+  const client = createModelClient(env, options(async () => stream([
+    { model: MODEL_NAME, choices: [{ delta: { content: "partial" }, finish_reason: "length" }] }, "[DONE]"
+  ])));
+  await assert.rejects(client.run(MODEL_NAME, { ...input, max_tokens: 16384 }), error =>
+    error.code === "output_truncated" && error.maxTokens === 16384 && error.resourceLimitReached === true);
+  assert.equal(client.stats.attempts, 1);
 });
