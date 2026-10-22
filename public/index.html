@@ -248,7 +248,7 @@
     function renderEvaluation(state) {
       const run=state.latestRun, calibration=run?.calibration;
       $("#evaluator-status").textContent=calibration ? `${calibration.passed?"通过":"未通过"} · ${calibration.results.filter(item=>item.passed).length}/${calibration.results.length}` : "尚无真实校准";
-      $("#evaluator-info").textContent=`生成模型：${state.model||run?.model||"待配置"}。评委：${state.evaluator?.model||"待配置"} / ${state.evaluator?.version||"V4"}。生成和评委同模型、不同固定职责提示词；可能有相关性偏差。数据池 9 开发 + 6 验证 + 3 审计；尚待独立人工审校。当天 AI 调用：${run?.usage?.calls??"—"} / 上限 64；HTTP 尝试：${run?.usage?.transport?.attempts??"—"}。`;
+      $("#evaluator-info").textContent=`生成模型：${state.model||run?.model||"待配置"}。评委：${state.evaluator?.model||"待配置"} / ${state.evaluator?.version||"V4"}。生成和评委同模型、不同固定职责提示词；可能有相关性偏差。数据池 9 开发 + 6 验证 + 3 审计；尚待独立人工审校。当天 AI 调用：${run?.usage?.calls??"—"} / 上限 ${run?.progress?.callLimit??64}；HTTP 尝试：${run?.usage?.transport?.attempts??"—"} / 上限 ${run?.progress?.httpAttemptLimit??64}。`;
       $("#scoring-policy").textContent=state.scoring||"";
       $("#legacy-score").textContent=state.legacyBaseline ? `旧评分存档：${state.legacyBaseline.championVersion} 为 ${state.legacyBaseline.score} 分（评分/模型周期不同，不能直接比较）。新冠军分数来自重新实测。` : "旧评分与当前模型周期分开保留。";
       const tbody=$("#calibration-table"), evidence=$("#calibration-evidence");tbody.replaceChildren();evidence.replaceChildren();

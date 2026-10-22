@@ -107,9 +107,9 @@ test("HTML auth errors are terminal and restored HTTP budgets are not reset", as
   }));
   await assert.rejects(client.run(MODEL_NAME, input), error => error.code === "http_401" && !error.retryable);
   assert.equal(requests, 1);
-  const restored = createModelClient(env, { ...options(async () => good()), initialStats: { attempts: 64 } });
-  await assert.rejects(restored.run(MODEL_NAME, input), error => error.code === "daily_budget");
-  assert.equal(restored.stats.attempts, 64);
+  const restored = createModelClient(env, { ...options(async () => good()), initialStats: { attempts: 96 } });
+  await assert.rejects(restored.run(MODEL_NAME, input), error => error.code === "daily_http_budget");
+  assert.equal(restored.stats.attempts, 96);
 });
 
 test("truncation retries once with more space for thinking, preserving physical usage and rejected evidence", async () => {
@@ -150,7 +150,7 @@ test("repeated truncation is retryable but cannot exceed two HTTP attempts or th
 test("truncation recovery never bypasses the shared HTTP budget and never accepts a different model", async () => {
   const client = createModelClient(env, { ...options(async () => Response.json({ model: MODEL_NAME,
     choices: [{ finish_reason: "length", message: { content: "partial" } }] })), maxAttempts: 1 });
-  await assert.rejects(client.run(MODEL_NAME, input), error => error.code === "daily_budget");
+  await assert.rejects(client.run(MODEL_NAME, input), error => error.code === "daily_http_budget");
   assert.equal(client.stats.attempts, 1);
   let calls = 0;
   await assert.rejects(createModelClient(env, options(async () => {

@@ -1,7 +1,7 @@
 import { experimentDate, getState, publicState, runEvolution } from "./evolution.js";
 import { createModelClient, redactError } from "./openrouter.js";
 import { MODEL_NAME, MODEL_PROFILE } from "./model.js";
-import { CHECKPOINT_PREFIX, DAILY_CALL_LIMIT } from "./journal.js";
+import { CHECKPOINT_PREFIX, DAILY_CALL_LIMIT, DAILY_HTTP_LIMIT } from "./journal.js";
 
 export const RETRY_DELAYS = [5, 15, 60, 180].map(minutes => minutes * 60000);
 export const MAX_FAILURES = 5;
@@ -88,7 +88,7 @@ export class EvolutionRunner {
             this.now() < Date.parse(existing.deadlineAt)) {
           const checkpoint = await this.records.get(`${CHECKPOINT_PREFIX}${date}`, "json");
           if ((checkpoint?.usage?.calls || 0) >= DAILY_CALL_LIMIT ||
-              (checkpoint?.usage?.transport?.attempts || 0) >= DAILY_CALL_LIMIT || existing.code === "daily_budget") {
+              (checkpoint?.usage?.transport?.attempts || 0) >= DAILY_HTTP_LIMIT || ["daily_budget", "daily_http_budget"].includes(existing.code)) {
             return { queued: false, reason: "daily_budget_exhausted", job: existing };
           }
           existing.manualRecoveries = (existing.manualRecoveries || 0) + 1;
@@ -207,7 +207,7 @@ export class EvolutionRunner {
           state.latestRun.usage = checkpoint.usage;
           state.latestRun.progress = { stage: checkpoint.stage, calls: checkpoint.usage?.calls || 0,
             completedTasks: Object.values(checkpoint.tasks).filter(item => item.status === "completed").length,
-            callLimit: DAILY_CALL_LIMIT, resumable: true };
+            callLimit: DAILY_CALL_LIMIT, httpAttemptLimit: DAILY_HTTP_LIMIT, resumable: true };
           state.latestRun.rejectedJudgeResponses = checkpoint.rejectedResponses || [];
           state.latestRun.rejectedModelResponses = checkpoint.rejectedModelResponses || [];
         }

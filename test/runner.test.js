@@ -206,7 +206,7 @@ test("post-fix operator recovery preserves total failures, execution and billing
 });
 
 test("manual recovery cannot bypass daily billing limits, the deadline, or its own finite attempt count", async () => {
-  for (const usage of [{ calls: 64 }, { calls: 12, transport: { attempts: 64 } }]) {
+  for (const usage of [{ calls: 64 }, { calls: 12, transport: { attempts: 96 } }]) {
     const mock = harness(async () => { throw Object.assign(new Error("quota"), { code: "quota_exhausted", retryable: false }); });
     await mock.runner.schedule(); await mock.runner.alarm();
     mock.records.set(`${CHECKPOINT_PREFIX}2026-10-10`, JSON.stringify({ usage }));

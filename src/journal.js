@@ -4,6 +4,7 @@ import { EVALUATOR_VERSION } from "./evaluator.js";
 
 export const CHECKPOINT_PREFIX = `rsi:v4:${MODEL_PROFILE}:checkpoint:`;
 export const DAILY_CALL_LIMIT = 64;
+export const DAILY_HTTP_LIMIT = 96;
 
 export function runError(message, code, retryable = false, extra = {}) {
   return Object.assign(new Error(message), { code, retryable, ...extra });

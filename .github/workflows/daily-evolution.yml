@@ -27,6 +27,7 @@ concurrency:
 
 jobs:
   archive:
+    name: Code checks and RSI health report (see summary)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

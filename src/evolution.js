@@ -4,7 +4,7 @@ import { calibrateEvaluator, createEvaluationContext, DEFAULT_JUDGE_MODEL, EVALU
 import { MODEL_PROFILE, MODEL_PROVIDER, MODEL_SUPPORTS_SEED, MODEL_BASE_URL, PREVIOUS_STATE_KEYS,
   MODEL_TOKEN_LIMITS, MODEL_CALL_RESERVE_MS } from "./model.js";
 import { createModelClient, redactError } from "./openrouter.js";
-import { openJournal, runError, DAILY_CALL_LIMIT } from "./journal.js";
+import { openJournal, runError, DAILY_CALL_LIMIT, DAILY_HTTP_LIMIT } from "./journal.js";
 
 export const STATE_KEY = `rsi:v4:${MODEL_PROFILE}:state`;
 export const RUN_PREFIX = `rsi:v4:${MODEL_PROFILE}:run:`;
@@ -421,8 +421,16 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
   const executionStarted = Date.now();
   const execution = { startedAt: new Date().toISOString(), status: "running", fromStage: cp.stage };
   cp.attempts.push(execution);
+  const checkSlice = () => {
+    if (Date.now() - executionStarted > (options.executionWindowMs ?? 600000) - MODEL_CALL_RESERVE_MS) {
+      throw runError("Execution slice finished; continue from checkpoint", "execution_slice", true);
+    }
+  };
+  cp.transportPolicies ||= {};
   const client = modelClient || createModelClient(env, {
-    initialStats: cp.usage?.transport, maxAttempts: DAILY_CALL_LIMIT,
+    initialStats: cp.usage?.transport, maxAttempts: DAILY_HTTP_LIMIT,
+    policies: cp.transportPolicies, beforeAttempt: checkSlice,
+    onPolicy: async policies => { cp.transportPolicies = policies; await journal.save(); },
     onAttempt: async stats => { cp.usage.transport = stats; await journal.save(); },
     onRejectedResponse: async (response, details) => {
       cp.rejectedModelResponses ||= [];
@@ -432,18 +440,14 @@ export async function runEvolution(env, timestamp = Date.now(), modelClient, opt
   });
   const context = createEvaluationContext(client, DEFAULT_JUDGE_MODEL, DAILY_CALL_LIMIT, {
     initialUsage: cp.usage,
-    beforeCall() {
-      if (Date.now() - executionStarted > (options.executionWindowMs ?? 600000) - MODEL_CALL_RESERVE_MS) {
-        throw runError("Execution slice finished; continue from checkpoint", "execution_slice", true);
-      }
-    },
+    beforeCall: checkSlice,
     async onUsage(usage) { cp.usage = usage; await journal.save(); }
   });
   context.journal = journal;
   cp.usage = context.usage;
   const developmentSamples = developmentForDate(date), validationSamples = validationForDate(date);
   const progress = () => ({ stage: cp.stage, completedTasks: Object.values(cp.tasks).filter(item => item.status === "completed").length,
-    calls: context.usage.calls, callLimit: DAILY_CALL_LIMIT, resumable: true });
+    calls: context.usage.calls, callLimit: DAILY_CALL_LIMIT, httpAttemptLimit: DAILY_HTTP_LIMIT, resumable: true });
   const rawEvidence = () => [
     ...(cp.rejectedModelResponses || []),
     ...(cp.rejectedResponses || []),
