@@ -3756,7 +3756,7 @@
   },
   "archive": {
     "date": "2026-10-27",
-    "checkedAt": "2026-10-27T07:02:21.386Z",
+    "checkedAt": "2026-10-27T13:53:02.733Z",
     "kind": "operational-status-not-successful-experiment",
     "experimentStatus": "failed",
     "freshMeasurement": false,
@@ -3764,8 +3764,8 @@
     "code": "calibration_rejected",
     "stage": "calibration",
     "fingerprint": "[\"2026-10-27\",\"litellm-minimax-m3\",\"4fbd42f8-a6ab-4475-8e58-bcd755b32ad0\",\"calibration\",\"calibration_rejected\"]",
-    "notify": true,
-    "duplicateAlert": false,
+    "notify": false,
+    "duplicateAlert": true,
     "error": "Evaluator calibration rejected: correct-passkeys",
     "notifiedFailures": [
       {
