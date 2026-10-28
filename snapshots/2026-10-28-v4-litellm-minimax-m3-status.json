@@ -6736,7 +6736,7 @@
   },
   "archive": {
     "date": "2026-10-28",
-    "checkedAt": "2026-10-28T07:43:55.500Z",
+    "checkedAt": "2026-10-28T14:47:58.024Z",
     "kind": "operational-status-not-successful-experiment",
     "experimentStatus": "failed",
     "freshMeasurement": false,
@@ -6744,8 +6744,8 @@
     "code": "output_truncated",
     "stage": "candidate-C1",
     "fingerprint": "[\"2026-10-28\",\"litellm-minimax-m3\",\"635c38a4-a38c-4267-8394-1f923af2fb05\",\"candidate-C1\",\"output_truncated\"]",
-    "notify": true,
-    "duplicateAlert": false,
+    "notify": false,
+    "duplicateAlert": true,
     "error": "LiteLLM output was truncated after bounded recovery; refusing incomplete evidence",
     "notifiedFailures": [
       {
