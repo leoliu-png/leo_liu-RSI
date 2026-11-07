@@ -3787,7 +3787,7 @@
   },
   "archive": {
     "date": "2026-11-07",
-    "checkedAt": "2026-11-07T08:00:01.482Z",
+    "checkedAt": "2026-11-07T14:37:11.305Z",
     "kind": "operational-status-not-successful-experiment",
     "experimentStatus": "failed",
     "freshMeasurement": false,
@@ -3795,8 +3795,8 @@
     "code": "calibration_rejected",
     "stage": "calibration",
     "fingerprint": "[\"2026-11-07\",\"litellm-minimax-m3\",\"892534ae-63fd-47d2-9793-5a341886ad19\",\"calibration\",\"calibration_rejected\"]",
-    "notify": true,
-    "duplicateAlert": false,
+    "notify": false,
+    "duplicateAlert": true,
     "error": "Evaluator calibration rejected: correct-http-cache, correct-passkeys",
     "notifiedFailures": [
       {
