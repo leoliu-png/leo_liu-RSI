@@ -3748,7 +3748,7 @@
   },
   "archive": {
     "date": "2026-11-11",
-    "checkedAt": "2026-11-10T16:00:42.350Z",
+    "checkedAt": "2026-11-10T21:27:49.370Z",
     "kind": "operational-status-not-successful-experiment",
     "experimentStatus": "not_started",
     "freshMeasurement": false,
